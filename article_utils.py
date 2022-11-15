@@ -5,6 +5,7 @@ import functools
 from datetime import datetime
 from tqdm import tqdm
 from preprocess_utils import num_of_lines, load_jsonb
+from pathlib import Path
 import pytz
 
 
@@ -25,8 +26,10 @@ fig_size = (20, 10)
 
 # Articles
 
+IMAGE_FOLDER = Path("images") / "analysis"
 
-def create_hist_plots(df: pd.DataFrame):
+
+def create_hist_plots(df: pd.DataFrame, save):
     rows = (len(used_cols) - 1) // plot_col + 1
     fig, axes = plt.subplots(rows, plot_col, figsize=fig_size)
     fig.suptitle(f"{df.Name} histogram plots")
@@ -36,8 +39,13 @@ def create_hist_plots(df: pd.DataFrame):
         ax = axes[d_row_idx][d_col_idx]
         df[used_cols[d]].hist(ax=ax, bins=150, legend=True)
 
+    p = IMAGE_FOLDER / df.Name
+    p.mkdir(parents=True, exist_ok=True)
+    if save:
+        fig.savefig(str((p / "histograms.png").absolute()))
 
-def create_whisker_plots(df: pd.DataFrame):
+
+def create_whisker_plots(df: pd.DataFrame, save):
     rows = (len(used_cols) - 1) // plot_col + 1
     fig, axes = plt.subplots(rows, plot_col, figsize=fig_size)
     fig.suptitle(f"{df.Name} whisker plots")
@@ -46,9 +54,13 @@ def create_whisker_plots(df: pd.DataFrame):
         d_col_idx = d % plot_col
         ax = axes[d_row_idx][d_col_idx]
         df.boxplot(used_cols[d], ax=ax)
+    p = IMAGE_FOLDER / df.Name
+    p.mkdir(parents=True, exist_ok=True)
+    if save:
+        fig.savefig(str((p / "whisker.png").absolute()))
 
 
-def create_date_plot(df: pd.DataFrame):
+def create_date_plot(df: pd.DataFrame, save):
     rows = (len(used_cols)) // plot_col + 1
     fig, axes = plt.subplots(rows, plot_col, figsize=fig_size)
     fig.suptitle(f"{df.Name} date plots")
@@ -63,12 +75,16 @@ def create_date_plot(df: pd.DataFrame):
     d_col_idx = len(used_cols) % plot_col
     ax = axes[d_row_idx][d_col_idx]
     groupby_date["url"].count().plot.area(ax=ax, legend=True)
+    p = IMAGE_FOLDER / df.Name
+    p.mkdir(parents=True, exist_ok=True)
+    if save:
+        fig.savefig(str((p / "dates.png").absolute()))
 
 
-def create_exploratory_plots(df):
-    create_hist_plots(df)
-    create_whisker_plots(df)
-    create_date_plot(df)
+def create_exploratory_plots(df, save=False):
+    create_hist_plots(df, save=save)
+    create_whisker_plots(df, save=save)
+    create_date_plot(df, save=save)
 
 
 toktok = ToktokTokenizer()

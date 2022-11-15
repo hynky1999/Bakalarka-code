@@ -94,6 +94,54 @@
     We haven't found any interesting with high value. But we found that with value lower than 14 there we related articles list at the end. Lower were also weather prediction.
 
 
+    \section{Idnes}
+    We first inspect the oldest articles.
+    First of all there is a article from 1900 which is href[https://www.idnes.cz/revue/zajimavosti/v-britanii-se-podarilo-vypestovat-dvojbarevne-jablko.A090928_105911_zajimavosti_nh this one. Probably a bug on idnes side. I removed it from analysis as it fucked up the graphs.]
+
+
+
+
+    \subsection{headline}
+    We first checked > 0.999 outliers. We didnt' find any probelms there. For < 20 it again showed the problem with [-]. We inspected 2014+ articles and didn't find any cutting
+
+    \subsection{article length}
+    No problem at big lengths. Those were some astornout lnog articles. I don't see reason to cut them off. As artciles over 6k words are jsut 5% of all articles.
+    There was also one with sport results
+
+    We found that articles with length < 100 were either bad parsed or just ome weird articles. <200 typicall short news.
+    This was also seen < 300. We decided to cut off articles with length < 300.
+
+    example of short one: https://www.idnes.cz/hry/kratke-zpravy/nadherny-pohled-na-theed-ve-star-wars-battlefront-ii.A170608_110306_bw-kratke-zpravy_oz
+
+    example of short one at 199x https://www.idnes.cz/hry/recenze/quest-for-glory-v-dragon-fire.A000405_questforglory5_bw
+
+
+    We also inspected strange outliers around 2000 but they were correctl parsed.
+
+
+
+    \subsection{avg word length}
+    We haven't found anything strange on both sides. We found some sport result <4 but it wasn't prevalent.
+
+    \subsection{word num}
+    Again we found 0.22 > ratio to be sport results Smaller.
+    
+
+
+
+    \subsection{brief}
+        WE found that value < 20 were typically not articles but rather manuals or file pages eg čeština do hry x or it was weather
+
+        We also check strange outliers around 2000 no idea if they are fine ???
+
+
+    \subsection{non-alpha}
+    Again 0.045 > ration was sport results. We have also checked peaks at < 2005 but they were correctly parsed sport articles.
+
+    \subsection{num of words per line}
+    Clealry there is problem with newlining at first extractor which ends at 2011. It doesn't correctly add \n. Will check it but I am not sure if it's even needed to fix it as we will just tokenize whole article and this should make a difference.
+
+    WE also check the low outliers but those were probbaly wrongly parsed as some of them had like 10 words per line. Tho not problem if tokenized.
 
 
     
