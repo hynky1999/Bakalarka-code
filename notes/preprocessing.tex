@@ -1,0 +1,104 @@
+\documentclass{article}
+\usepackage{biblatex}
+\addbibresource{biblio.bib}
+\usepackage{graphicx}
+\graphicspath{{./Images}}
+\usepackage{algpseudocode}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+\usepackage{tcolorbox}
+\usepackage{array}
+\usepackage{svg}
+\usepackage{hyperref}
+\begin{document}
+    \section{CZ check}
+    We first run a check for cz language. For this purpose we used fasttext model.
+    It can only work on lines so we had to split to lines and run it.
+    At first we also applied the filtering to brief. But we found it that is had a lot a false negatives.
+    We decided to drop it and oniy use the filterin on article
+    This produces a percentage of czech lines. We tried to use ratio o 1.0 and checked the results.
+    We got: #TODO
+    It eliminiated a lot of articles so we decided to inspect it more closely. We generated histogram graphs based on ratio to see.
+    We decided to inspect the result with ratio of 0.0. As expected we found a lot of ukraine article in seznamzpravy.cz
+    Deník had a lot of articles with just one line with `VIDEOSOUHRN SPUSTíTE ZDE' etc...
+    Idnes had problems with tables being parsed cell per line. So for mobile phones it had no chance to be czech.
+    Other problems was english that was prevalent. We also found few slovak articles.
+
+    0.3 outliers.
+    Stil the same problems but more of false negatives. Often due to table or sport matches
+
+    Matches problem:
+    CELKOVÉ POŘADÍ - JEDNOTLIVCI
+        1. a 2. místo
+        TC0029 Milan Matoušek, Tachov 13 84
+        TC0059 Radek Mazanec, Planá 13 84
+        3. až 12. místo
+
+    Tables problem
+
+
+
+    We the proceed to NULL author that weren't real people.
+
+    \section{Article inspection}
+    After that we inspect articles per server basic
+
+
+    \section{Irozhlas}
+    We first inspect the oldest articles.
+    It turns out there is one from 1992. Idk why it's there but i check url and it is really from that year. Should I erase all to 2017 because on github I said i will use only 2017-2019? Articles are correclty parsed because
+    irozhlas has only one version feeelsgood.
+
+
+    \subsection{headline}
+    First we checked both ends of headlin we didn't find that the end of headline would be forceully cut off.
+    Howerver there we problems at low number of characters. We found few articles with just two characters or one words.
+    When preprocessing we would also split headline by [-] an then take a first part. However it turns out that it might not
+    have been good idea as we would then get this headline. Fotbalisté Boleslavi deklasovali v play or Proč krachují start.
+    We will have to run the extractor again I guess without this rule. After that we will set threshold to 25/30 characters.
+
+    We also seen holes in the graph. However we listen the parts where there are supposed to be 0 headline length but there we no holes.
+    Idk why it shows it like this..........
+
+    We also checked why the mean line is so perfect around 2021 for mean by date.
+    1 reason is simply because of graph density. Second is that the write are force to write healines of length 110 characters. We isnpected headlines and they were not cut off.
+    We also checked the outliers with high values but they were perfeclty fine.
+
+    \subsection{article length}
+    No problem at big lengths. Those are podcast transcripts. I don't see reason to cut them off. As artciles over 4k words are jsut 5% of all articles.
+
+    We found that articles with length < 100 were either bad parsed or just ome weird articles.
+    This was also seen < 300. We decided to cut off articles with length < 300.
+
+    We also inspected the big outlier with huge aritcle length that happend in 2022. It's this url and it is truly feaking long https://www.irozhlas.cz/zpravy-svet/polsko-evropska-unie-soudni-dvur-eu-europoslanec-marek-belka_2112151341_ern.
+
+
+    \subsection{avg word length}
+    We found out that low avg word length were the sport results. We decided to cut off articles with avg word length < 4.3. We haven't found anything wrong with high values. Otherwise we can see from graphs that there is high correlation between avg word length and article length.
+
+
+    \subsection{word num}
+    Since we could easly see huge correlation between word num and article length we decided to use ratio. We found the sport results articles to have ratio > 0.22.
+
+
+
+    \subsection{brief}
+    We found out that we could filter weather articles based on brief. noc -6 až -15 °C | den -9 až -5 °C. Also from what I have seen author article usually ahve longer brief than 50. If not it's usually sport report or aut oreport.
+    No problems with long brief. We also check strange same brief at the 2022 but it is just bad visualization.
+
+
+    \subsection{non-alpha}
+    We found the non-alpha to be quite useless as it again corellated with article length. We decided to use ratio of non-alpha/article lengt. We found out that articles with 0.045 are the ones with sport results. low values not particularry interesting. We also observed the outlier in 2004 and those were again sport resuts.
+
+    \subsection{num of words per line}
+    We haven't found any interesting with high value. But we found that with value lower than 14 there we related articles list at the end. Lower were also weather prediction.
+
+
+
+
+    
+
+
+
+    \printbibliography
+\end{document}
