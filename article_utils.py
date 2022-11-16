@@ -4,7 +4,7 @@ from nltk.tokenize.toktok import ToktokTokenizer
 import functools
 from datetime import datetime
 from tqdm import tqdm
-from preprocess_utils import num_of_lines, load_jsonb
+from preprocess_utils import num_of_lines, load_jsonb, show_df_lines
 from pathlib import Path
 import pytz
 
@@ -94,6 +94,50 @@ def flatten(l):
     return [item for sublist in l for item in sublist]
 
 
+def get_statistics(js):
+    url = js["url"]
+    article = js["content"].strip()
+    brief = js["brief"].strip() if js["brief"] else None
+    headline = js["headline"].strip()
+    article_length = len(article)
+    brief_length = len(brief) if brief else None
+    headline_length = len(headline)
+
+    # Tok tok is speedy unlike the others
+    tokenized = toktok.tokenize(article)
+    num_words = len(tokenized)
+    num_words_ratio = num_words / article_length
+    num_words_per_line = num_words / len(article.split("\n"))
+    avg_word_length = get_average_word_length(tokenized)
+    non_alpha = count_non_alpha(tokenized)
+    non_alpha_ratio = non_alpha / article_length
+    date = (
+        datetime.fromisoformat(js["publication_date"])
+        if js["publication_date"] != None
+        else None
+    )
+    if date != None and date.tzinfo == None:
+        date = date.replace(tzinfo=pytz.UTC)
+
+    if date != None:
+        date = date.date()
+    comments_num = js["comments_num"]
+    return (
+        url,
+        article_length,
+        headline_length,
+        brief_length,
+        num_words,
+        num_words_ratio,
+        num_words_per_line,
+        avg_word_length,
+        non_alpha,
+        non_alpha_ratio,
+        date,
+        comments_num,
+    )
+
+
 @functools.cache
 def create_df(file):
     length = num_of_lines(file)
@@ -113,47 +157,9 @@ def create_df(file):
     ]
     l = []
     for js in tqdm(load_jsonb(file), total=length):
-        url = js["url"]
-        article = js["content"].strip()
-        brief = js["brief"].strip() if js["brief"] else None
-        headline = js["headline"].strip()
-        article_length = len(article)
-        brief_length = len(brief) if brief else None
-        headline_length = len(headline)
-
-        # Tok tok is speedy unlike the others
-        tokenized = toktok.tokenize(article)
-        num_words = len(tokenized)
-        num_words_ratio = num_words / article_length
-        num_words_per_line = num_words / len(article.split("\n"))
-        avg_word_length = get_average_word_length(tokenized)
-        non_alpha = count_non_alpha(tokenized)
-        non_alpha_ratio = non_alpha / article_length
-        date = (
-            datetime.fromisoformat(js["publication_date"])
-            if js["publication_date"] != None
-            else None
-        )
-        if date != None and date.tzinfo == None:
-            date = date.replace(tzinfo=pytz.UTC)
-
-        if date != None:
-            date = date.date()
-        comments_num = js["comments_num"]
         l.append(
             [
-                url,
-                article_length,
-                headline_length,
-                brief_length,
-                num_words,
-                num_words_ratio,
-                num_words_per_line,
-                avg_word_length,
-                non_alpha,
-                non_alpha_ratio,
-                date,
-                comments_num,
+                *get_statistics(js),
             ]
         )
 
@@ -170,3 +176,44 @@ def get_average_word_length(tokenized_article):
 def count_non_alpha(article):
     # Should new line also count ?
     return sum([1 for char in article if not char.isalnum()])
+
+
+### INSPECT TOOLS
+
+
+def inspect_drop_date(
+    df,
+    col,
+    file,
+    mod,
+    start: datetime,
+    end: datetime,
+    middle: datetime | None = None,
+    type: str = "up",
+    num=10,
+):
+    start_date = start.date()
+    end_date = end.date()
+    middle_date = middle.date() if middle else None
+    dates_adjusted = df[(df["date"] > start_date) & (df["date"] < end_date)]
+
+    dates_adjusted.groupby("date").mean()[col].plot()
+
+    if middle_date:
+        asc = False if type == "up" else True
+
+        left = (
+            dates_adjusted[dates_adjusted["date"] < middle_date]
+            .sort_values(col, ascending=asc)
+            .head(num)
+        )
+
+        right = (
+            dates_adjusted[dates_adjusted["date"] > middle_date]
+            .sort_values(col, ascending=asc)
+            .head(num)
+        )
+
+        show_df_lines(left, file, mod)
+        print("TAIL\n\n\n")
+        show_df_lines(right, file, mod)

@@ -104,6 +104,7 @@
     \subsection{headline}
     We first checked > 0.999 outliers. We didnt' find any probelms there. For < 20 it again showed the problem with [-]. We inspected 2014+ articles and didn't find any cutting
 
+    We also checked drop after 74 but didn't find any cutting.
     \subsection{article length}
     No problem at big lengths. Those were some astornout lnog articles. I don't see reason to cut them off. As artciles over 6k words are jsut 5% of all articles.
     There was also one with sport results
@@ -142,6 +143,153 @@
     Clealry there is problem with newlining at first extractor which ends at 2011. It doesn't correctly add \n. Will check it but I am not sure if it's even needed to fix it as we will just tokenize whole article and this should make a difference.
 
     WE also check the low outliers but those were probbaly wrongly parsed as some of them had like 10 words per line. Tho not problem if tokenized.
+
+    \subsection{Key findings}
+    Article length peaks are ok as per section. Same for brief length.
+    Num words per line wrongly parsed line but should metter. non-alpha ratio is also fine
+
+    \section{novinky}
+    Again we found old article from 1900. I removed it from analysis as it fucked up the graphs.
+    \subsection{headline}
+        Nothing wrong with long ones
+        Nothing interesint at == 20. But < 20 were strange.
+        Nothing strange with them date > 2021.
+
+    \subsection{article length}
+        BIG PROBLEM !!! a lot of articles with < 200 length. Must cut it.
+        Long articles not problematic as they are interviews.
+        The problem is likely due to parsing as I found one article https://www.idnes.cz/onadnes/zdravi/pri-behani-hraje-nejvetsi-roli-hlava-osobni-zkusenosti.A160314_103053_ctenari-sobe_jid
+
+        which only parsed the headings.
+        Strange thing is that we have two extractors for novinky but the proportion of articles with < 200 length is the same. So it's not due to extractor.
+
+    \subsection{avg word length}
+        Outliers over 0.99 shows the problematinc articles with only heading.
+
+    \subsection{word num ratio}
+        Both high and low values shows problematic articles
+
+    \subsection{brief}
+        Overall brief looks kinda scatchy as they don't look like briefs. Low < 20 briefs show that. Will have to recheck extracting.
+
+    \subsection{non-alpha}
+        Again we can see clealry which articles are problematic. Because they have very low non-alpha ratio as those are only headings.
+        No common denominator of high values.
+
+    \subsection{num of words per line}
+        Same problem low values show headings.
+        
+    \subsection{Key findings}
+        BIG PROBLEM with content extraction oftentimes extracted only headings.
+        No idea why there are holes in headline but shouldn't be there basedo on data. No way to inspect articles peak at 2018-07-19 as the articles are not there anymore.
+
+
+
+    \section{SeznamZpravy}
+    \subsection{headline}
+        Classic - problem. No probelm otherwise. No idea why there is steap drop around 2019. INspected it and found nothing strange.
+        No idea how to debug the spikes.
+
+
+    \subsection{word length}
+        Nothing interesting
+
+    \subseciton{num words ratio}
+        Same problem as with novinky > 0.22 shows only headings.
+
+    \subsection{article length}
+    The long articles at 2022 are due to covid articles or interviews.
+    IIMPORTANT again with articles < 200 we spotteed problem with headings.
+    We also check 
+
+    \subsection{brief length}
+    The step drop at 230 was inspected and is probably restricted by senzamzpravy as no cut was seen.
+
+
+    \subsection{non-alpha}
+    > 0.06 shows heading probllem.
+
+    \subsection{num of words per line}
+    No problem with parsing now. High values looked fine, just long paragraphs.
+    Low values typically contained table.
+
+    \subsection{Key findings}
+    Again problem with heading. Brief is not probellmatic with drop.
+    No idea how to debug steep drop at 2022-02 of num of articles.
+
+
+
+    \section{aktualne}
+    \subsection{headline}
+     Same problem with [-]. Check the drops and haven't found any cutting.
+     Check change by date 
+
+     I have also checked the dramatic drops around 2008 and 2017.
+     No idea what happend at 2008. I checked the headline before and after and they were fine.
+
+     2017 was when layout of page change and we use extractor 2.0 for that. However I again checked both ends and they are correct articles thus it's likely that writers were told to write longer articles.
+
+     Same applies to 2019.
+
+    \subsection{article length}
+    The long articles are transcripts of documents. like this https://zpravy.aktualne.cz/domaci/dokument-vladni-navrh-na-zruseni-delnicke-stany/r~i:article:649724/
+
+    I think we should cut it by setting max length to something similiar to outher sources.
+
+    < 200 are typically photogalleris or videos. We should cut it by setting min length to like 300. Maybe even higher
+
+    \subsection{avg word length}
+    No problem with high values. < 3.8 usually soprt results.
+
+    \subsection{word num ratio}
+    > 0.22 usually sport results. < 0.11 Usually short pages like photogallery or videos but not as prevalent as with aritcle length.
+
+    \subsection{brief}
+    Low values typically sport results live Slava - Spatta 1:2, but there not excluseive.
+
+    We found high values like 300 to be valid briefs and correctly parsed. For some reason these long ones are from second extractor period. No idea why.
+
+    FOUND IT. The difference is that there are basically two briefs for the article. One that is short is in metadata and one is at the start of the article. NEEDS TO BEEEE FIXED.
+
+    \subsection{non-alpha}
+    > 0.06 usually sport results
+
+    \subsection{num of words per line}
+    Nothing interesting
+
+    \subsection{Key findings}
+    Problem with brief. Must be extracted from article. Otherwise okay.
+    Must cut short articles to elimate gallerys and videos.
+
+    \sectoin{denik}
+    \subsection{headline}
+    Reason for peaks is simply that bin size is too big and thus some bins conainta only partial data. I checked 80 drop and haven't found any cutting.
+    > 80 headlines were correctly pardsed. Same probles as other [-]
+
+    \subsection{article length}
+    No problems found at that department. Even < 200 were okay.
+
+    \subsection{avg word length}
+    > 10 problem as it was just urls. < 3.8  just sport results.
+
+    \subsection{word num ratio}
+    > 0.22 just sport results. < 0.11 just ulrs.
+
+    \subsection{brief}
+    Briefs correctly parsed.  Even ones with 1000 words. < 20 were fine too.
+
+    \subsectoin{non-alpha}
+    > 0.06 sport results/electoin results. < 0.01 not interesting.
+
+    \subsection{num of words per line}
+    < 10 table like articles with listings etc. Long one probably has wrong splitting, but no problem with tokenization.
+
+    \subsection{Key findings}
+    Overall it was very well parsed. The only problem are those super short articles with long word length.
+
+    
+
+
 
 
     
