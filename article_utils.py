@@ -3,22 +3,41 @@ import matplotlib.pyplot as plt
 from nltk.tokenize.toktok import ToktokTokenizer
 import functools
 from datetime import datetime
-from tqdm import tqdm
 from preprocess_utils import num_of_lines, load_jsonb, show_df_lines
 from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import date
 import pytz
 
 
+@dataclass
+class Stats:
+    url: str
+    article_length: int
+    headline_length: int | None
+    brief_length: int | None
+    brief_non_alpha_ratio: float | None
+    num_words: int
+    num_words_ratio: float
+    num_words_per_line: float
+    avg_word_length: float
+    non_alpha: int
+    non_alpha_ratio: float
+    date: date | None
+
+
 used_cols = [
-    "article length",
-    "headline length",
-    "brief length",
-    "num words",
-    "num words ratio",
-    "num words per line",
-    "avg word length",
-    "non-alpha",
-    "non-alpha ratio",
+    "article_length",
+    "headline_length",
+    "brief_length",
+    "brief_non_alpha_ratio",
+    "num_words",
+    "num_words_ratio",
+    "num_words_per_line",
+    "avg_word_length",
+    "non_alpha",
+    "non_alpha_ratio",
 ]
 plot_col = 3
 fig_size = (20, 10)
@@ -27,9 +46,12 @@ fig_size = (20, 10)
 # Articles
 
 IMAGE_FOLDER = Path("images") / "analysis"
+HIST_NAME = "hist.png"
+WHISKER_NAME = "whisker.png"
+BY_DATE_NAME = "by_date.png"
 
 
-def create_hist_plots(df: pd.DataFrame, save):
+def create_hist_plots(df: pd.DataFrame, save: bool):
     rows = (len(used_cols) - 1) // plot_col + 1
     fig, axes = plt.subplots(rows, plot_col, figsize=fig_size)
     fig.suptitle(f"{df.Name} histogram plots")
@@ -42,10 +64,10 @@ def create_hist_plots(df: pd.DataFrame, save):
     p = IMAGE_FOLDER / df.Name
     p.mkdir(parents=True, exist_ok=True)
     if save:
-        fig.savefig(str((p / "histograms.png").absolute()))
+        fig.savefig(str((p / HIST_NAME).absolute()))
 
 
-def create_whisker_plots(df: pd.DataFrame, save):
+def create_whisker_plots(df: pd.DataFrame, save: bool):
     rows = (len(used_cols) - 1) // plot_col + 1
     fig, axes = plt.subplots(rows, plot_col, figsize=fig_size)
     fig.suptitle(f"{df.Name} whisker plots")
@@ -57,10 +79,10 @@ def create_whisker_plots(df: pd.DataFrame, save):
     p = IMAGE_FOLDER / df.Name
     p.mkdir(parents=True, exist_ok=True)
     if save:
-        fig.savefig(str((p / "whisker.png").absolute()))
+        fig.savefig(str((p / WHISKER_NAME).absolute()))
 
 
-def create_date_plot(df: pd.DataFrame, save):
+def create_date_plot(df: pd.DataFrame, save: bool):
     rows = (len(used_cols)) // plot_col + 1
     fig, axes = plt.subplots(rows, plot_col, figsize=fig_size)
     fig.suptitle(f"{df.Name} date plots")
@@ -78,10 +100,10 @@ def create_date_plot(df: pd.DataFrame, save):
     p = IMAGE_FOLDER / df.Name
     p.mkdir(parents=True, exist_ok=True)
     if save:
-        fig.savefig(str((p / "dates.png").absolute()))
+        fig.savefig(str((p / BY_DATE_NAME).absolute()))
 
 
-def create_exploratory_plots(df, save=False):
+def create_exploratory_plots(df: pd.DataFrame, save=False):
     create_hist_plots(df, save=save)
     create_whisker_plots(df, save=save)
     create_date_plot(df, save=save)
@@ -94,7 +116,19 @@ def flatten(l):
     return [item for sublist in l for item in sublist]
 
 
-def get_statistics(js):
+def published_date_to_date(date: str | None):
+    if date is None:
+        return None
+
+    date_from = datetime.fromisoformat(date)
+    if date_from.tzinfo == None:
+        date_from = date_from.replace(tzinfo=pytz.UTC)
+
+    date_date = date_from.date()
+    return date_date
+
+
+def get_statistics(js: dict):
     url = js["url"]
     article = js["content"].strip()
     brief = js["brief"].strip() if js["brief"] else None
@@ -110,23 +144,17 @@ def get_statistics(js):
     num_words_per_line = num_words / len(article.split("\n"))
     avg_word_length = get_average_word_length(tokenized)
     non_alpha = count_non_alpha(tokenized)
-    non_alpha_ratio = non_alpha / article_length
-    date = (
-        datetime.fromisoformat(js["publication_date"])
-        if js["publication_date"] != None
-        else None
+    brief_non_alpha_ratio = (
+        count_non_alpha(toktok.tokenize(brief)) / article_length if brief else None
     )
-    if date != None and date.tzinfo == None:
-        date = date.replace(tzinfo=pytz.UTC)
-
-    if date != None:
-        date = date.date()
-    comments_num = js["comments_num"]
-    return (
+    non_alpha_ratio = non_alpha / article_length
+    date = published_date_to_date(js["publication_date"])
+    return Stats(
         url,
         article_length,
         headline_length,
         brief_length,
+        brief_non_alpha_ratio,
         num_words,
         num_words_ratio,
         num_words_per_line,
@@ -134,36 +162,18 @@ def get_statistics(js):
         non_alpha,
         non_alpha_ratio,
         date,
-        comments_num,
     )
 
 
 @functools.cache
-def create_df(file):
-    length = num_of_lines(file)
-    header = [
-        "url",
-        "article length",
-        "headline length",
-        "brief length",
-        "num words",
-        "num words ratio",
-        "num words per line",
-        "avg word length",
-        "non-alpha",
-        "non-alpha ratio",
-        "date",
-        "comments_num",
-    ]
+def create_df(file: Path):
     l = []
-    for js in tqdm(load_jsonb(file), total=length):
+    for js in load_jsonb(file):
         l.append(
-            [
-                *get_statistics(js),
-            ]
+            get_statistics(js).__dict__,
         )
 
-    df = pd.DataFrame(l, columns=header)
+    df = pd.DataFrame(l)
     df.Name = file.name
 
     return df

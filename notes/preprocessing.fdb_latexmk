@@ -4,9 +4,9 @@
   (generated)
   "preprocessing.bbl"
   "preprocessing.blg"
-["pdflatex"] 1668581820 "/home/kydliceh/Projects/Bakalarka/BakalarskaPrace/notes/preprocessing.tex" "preprocessing.pdf" "preprocessing" 1668581820
+["pdflatex"] 1669767865 "/home/kydliceh/Projects/Bakalarka/BakalarskaPrace/notes/preprocessing.tex" "preprocessing.pdf" "preprocessing" 1669767865
   "/home/kydliceh/.texlive2021/texmf-var/web2c/pdftex/pdflatex.fmt" 1658476957 1345254 7b53f64cda9d04726ca1d5e43aa6eec2 ""
-  "/home/kydliceh/Projects/Bakalarka/BakalarskaPrace/notes/preprocessing.tex" 1668581817 13987 6cf23c074e35ce43a340e012143298c2 ""
+  "/home/kydliceh/Projects/Bakalarka/BakalarskaPrace/notes/preprocessing.tex" 1669767862 13920 3769d56cc4e339df39e2d0d3dceececc ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1136849721 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/tcrm1000.tfm" 1136768653 1536 e07581a4bb3136ece9eeb4c3ffab8233 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmbx12.tfm" 1136768653 1324 c910af8c371558dc20f2d7822f66fe64 ""
@@ -149,12 +149,12 @@
   "/usr/share/texlive/texmf-dist/tex/latex/url/url.sty" 1388531844 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "/usr/share/texlive/texmf-dist/tex/latex/xcolor/xcolor.sty" 1463002160 55589 34128738f682d033422ca125f82e5d62 ""
   "/usr/share/texlive/texmf-dist/web2c/texmf.cnf" 1642711416 40136 b05acc85e8425979e52682d98a2bcacf ""
-  "/usr/share/texlive/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1663277976 337709 49943eb4445fd8cfc8de3ccbb0c62d84 ""
-  "preprocessing.aux" 1668581820 32 3985256e7290058c681f74d7a3565a19 "pdflatex"
+  "/usr/share/texlive/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1668597723 351388 5ac10bd41e61cf4ed81131f0297d946c ""
+  "preprocessing.aux" 1669767865 32 3985256e7290058c681f74d7a3565a19 "pdflatex"
   "preprocessing.bbl" 0 -1 0 "biber preprocessing"
   "preprocessing.out" 0 -1 0 "pdflatex"
   "preprocessing.run.xml" 0 -1 0 "pdflatex"
-  "preprocessing.tex" 1668581817 13987 6cf23c074e35ce43a340e012143298c2 ""
+  "preprocessing.tex" 1669767862 13920 3769d56cc4e339df39e2d0d3dceececc ""
   (generated)
   "preprocessing.aux"
   "preprocessing.bcf"

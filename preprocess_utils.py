@@ -18,17 +18,26 @@ names = [
 ]
 
 
-def save_jsonb(l, filename, mode="w"):
+def save_jsonb(l, filename, mode="w", show_progress=True):
+    iterable = l
+    if show_progress:
+        iterable = tqdm(l)
     filename.parent.mkdir(parents=True, exist_ok=True)
     with open(filename, mode) as f:
-        for item in l:
+        for item in iterable:
             f.write(json.dumps(item))
             f.write("\n")
 
 
-def load_jsonb(filename):
+def load_jsonb(filename, show_progress=True):
+    total = 0
+    if show_progress:
+        total = num_of_lines(filename)
     with open(filename, "r") as f:
-        for line in f:
+        iterable = f
+        if show_progress:
+            iterable = tqdm(f, total=total)
+        for line in iterable:
             yield json.loads(line)
 
 
@@ -45,7 +54,7 @@ def articles_num(folder):
 
 # CZ checking
 def filter_by_cz_lang(json_file, ratio=1.0, yield_false=False, article_only=False):
-    for article in tqdm(load_jsonb(json_file), total=num_of_lines(json_file)):
+    for article in load_jsonb(json_file):
         content = article["content"]
         content_ratio = is_cz(content)
         data = None
@@ -61,7 +70,7 @@ def filter_by_cz_lang(json_file, ratio=1.0, yield_false=False, article_only=Fals
                 yield data
 
 
-model = fasttext.load_model("lid.176.ftz")
+model = fasttext.load_model(str(Path(__file__).parent / "lid.176.ftz"))
 
 
 def is_cz(article):
@@ -134,7 +143,7 @@ def show_df_lines(df, filename, mod=lambda x: x):
 def get_unique(file, col):
     authors = dict()
     length = num_of_lines(file)
-    for js in tqdm(load_jsonb(file), total=length):
+    for js in load_jsonb(file):
         if js[col] == None:
             continue
 
@@ -146,5 +155,3 @@ def get_unique(file, col):
 
 get_unique_authors = lambda file: get_unique(file, "author")
 get_unique_topics = lambda file: get_unique(file, "keywords")
-
-
