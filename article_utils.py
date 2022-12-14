@@ -17,7 +17,6 @@ class Stats:
     article_length: int
     headline_length: int | None
     brief_length: int | None
-    brief_non_alpha_ratio: float | None
     num_words: int
     num_words_ratio: float
     num_words_per_line: float
@@ -31,7 +30,6 @@ used_cols = [
     "article_length",
     "headline_length",
     "brief_length",
-    "brief_non_alpha_ratio",
     "num_words",
     "num_words_ratio",
     "num_words_per_line",
@@ -144,9 +142,6 @@ def get_statistics(js: dict):
     num_words_per_line = num_words / len(article.split("\n"))
     avg_word_length = get_average_word_length(tokenized)
     non_alpha = count_non_alpha(tokenized)
-    brief_non_alpha_ratio = (
-        count_non_alpha(toktok.tokenize(brief)) / article_length if brief else None
-    )
     non_alpha_ratio = non_alpha / article_length
     date = published_date_to_date(js["publication_date"])
     return Stats(
@@ -154,7 +149,6 @@ def get_statistics(js: dict):
         article_length,
         headline_length,
         brief_length,
-        brief_non_alpha_ratio,
         num_words,
         num_words_ratio,
         num_words_per_line,

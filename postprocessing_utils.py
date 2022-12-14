@@ -1,11 +1,13 @@
+import datetime
+import json
+from typing import List
 from article_utils import published_date_to_date
 from dataclasses import dataclass
-from enum import Enum
+from enum import IntEnum
 import re
 
 
-@dataclass
-class Gender(Enum):
+class Gender(IntEnum):
     MAN = 1
     WOMAN = 2
 
@@ -18,8 +20,8 @@ class Article:
     brief: str | None
     content: str
     category: str | None
-    authors: str | None
-    author_geders: Gender | None
+    authors: List[str] | None
+    author_genders: List[Gender] | None
     date: str | None
     day: int | None
 
@@ -42,15 +44,21 @@ def postprocess_author(author):
 
 
 def postprocess_authors(js):
-    js["author"] = [postprocess_author(author) for author in js["author"]]
-    js["author_genders"] = list(map(guess_gender, js["author"]))
+    js["author"] = (
+        [postprocess_author(author) for author in js["author"]]
+        if js["author"]
+        else None
+    )
+    js["author_genders"] = (
+        list(map(guess_gender, js["author"])) if js["author"] else None
+    )
     return js
 
 
 def guess_gender(author):
     if author == None:
         return None
-    if author.endswith("ová"):
+    if author.lower().endswith("ová"):
         return Gender.WOMAN
 
     # TODO: improve
@@ -191,10 +199,10 @@ def cap_with_dot(headline):
         return None
 
     headline = headline.strip()
-    if headline[-1] == "." and headline[-2] != ".":
+    if len(headline) >= 2 and headline[-1] == "." and headline[-2] != ".":
         headline = headline[:-1]
 
-    if headline[0].islower():
+    if len(headline) > 1 and headline[0].islower():
         headline = headline[0].upper() + headline[1:]
 
     return headline
@@ -222,7 +230,9 @@ def postprocess_brief(js):
 
 
 def postprocess_category(js):
-    js["category"] = [cap_with_dot(x) for x in js["category"]]
+    js["category"] = cap_with_dot(js["category"])
+    if js["category"] != None:
+        js["category"] = js["category"].lower()
     return js
 
 
@@ -235,15 +245,14 @@ def add_server(server):
 
 
 def as_Article(js):
-    return Article(
-        url=js["url"],
-        server=js["server"],
-        headline=js["headline"],
-        brief=js["brief"],
-        content=js["content"],
-        category=js["category"],
-        authors=js["author"],
-        author_geders=js["author_genders"],
-        date=js["date"],
-        day=js["day"],
-    )
+    return js
+
+
+class JSONArticleEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Gender):
+            return obj.value
+
+        if isinstance(obj, datetime.date):
+            return str(obj)
+        return json.JSONEncoder.default(self, obj)

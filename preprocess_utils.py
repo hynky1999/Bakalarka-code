@@ -1,4 +1,5 @@
 import json
+from typing import Type
 import fasttext
 from tqdm import tqdm
 import logging
@@ -18,14 +19,20 @@ names = [
 ]
 
 
-def save_jsonb(l, filename, mode="w", show_progress=True):
+def save_jsonb(
+    l,
+    filename,
+    mode="w",
+    encoder: Type[json.JSONEncoder] = json.JSONEncoder,
+    show_progress=True,
+):
     iterable = l
     if show_progress:
         iterable = tqdm(l)
     filename.parent.mkdir(parents=True, exist_ok=True)
     with open(filename, mode) as f:
         for item in iterable:
-            f.write(json.dumps(item))
+            f.write(json.dumps(item, cls=encoder))
             f.write("\n")
 
 
@@ -141,17 +148,22 @@ def show_df_lines(df, filename, mod=lambda x: x):
 
 
 def get_unique(file, col):
-    authors = dict()
-    length = num_of_lines(file)
+    u_vals = dict()
     for js in load_jsonb(file):
-        if js[col] == None:
+        js_list = js[col]
+        if js_list == None:
             continue
 
-        for js_val in js[col]:
-            val = authors.get(js_val, 0)
-            authors[js_val] = val + 1
-    return authors
+        if not isinstance(js_list, list):
+            js_list = [js_list]
+
+        for js_val in js_list:
+            val = u_vals.get(js_val, 0)
+            u_vals[js_val] = val + 1
+    return u_vals
 
 
 get_unique_authors = lambda file: get_unique(file, "author")
 get_unique_topics = lambda file: get_unique(file, "keywords")
+
+get_unique_category = lambda file: get_unique(file, "category")
