@@ -1,88 +1,145 @@
 from pathlib import Path
 from typing import List
 from postprocessing_utils import Gender
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.multioutput import MultiOutputClassifier, MultiOutputRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.metrics import classification_report
 import numpy as np
+import pickle
 
 
-class ServerModel:
+class Model:
     def __init__(self):
-        self.model = LogisticRegression()
+        raise NotImplementedError
 
     def fit(self, features, labels):
-        self.model.fit(features, labels)
+        raise NotImplementedError
+
+    def predict(self, features):
+        raise NotImplementedError
+
+    def score(self, features, labels):
+        raise NotImplementedError
+
+    def save(self, path: Path):
+        raise NotImplementedError
+
+    def load(self, path: Path):
+        raise NotImplementedError
+
+    def set_params(self, **params):
+        raise NotImplementedError
+
+    def get_params(self):
+        raise NotImplementedError
+
+
+class PickleModel(Model):
+    def __init__(self, model):
+        self.model = model
+
+    def fit(self, features, labels):
+        self.model = self.model.fit(features, labels)
         return self
 
     def predict(self, features):
         return self.model.predict(features)
 
+    def save(self, path: Path):
+        with open(path, "wb") as f:
+            pickle.dump(self.model, f)
 
-class CategoryModel:
+    def load(self, path: Path):
+        with open(path, "rb") as f:
+            self.model = pickle.load(f)
+
+    def score(self, features, labels):
+        return self.model.score(features, labels)
+
+    def set_params(self, **params):
+        self.model.set_params(**params)
+
+    def get_params(self):
+        return self.model.get_params()
+
+
+class ServerModel(PickleModel):
     def __init__(self):
-        self.model = LogisticRegression()
+        model = LogisticRegression(max_iter=1000, verbose=1, n_jobs=8)
+        super().__init__(model)
 
-    def fit(self, features, labels):
-        self.model.fit(features, labels)
-        return self
+    def score(self, features, labels):
+        return classification_report(labels, self.predict(features))
+
+
+class CategoryModel(PickleModel):
+    def __init__(self):
+        model = LogisticRegression(
+            max_iter=1000, verbose=1, multi_class="multinomial", n_jobs=8
+        )
+        super().__init__(model)
+
+    def score(self, features, labels):
+        return classification_report(labels, self.predict(features))
 
     def predict(self, features):
-        return self.model.predict(features)
+        return super().predict(features)
+
+    def fit(self, features, labels):
+        return super().fit(features, labels)
 
 
 # Ccan't use TransfomerRegressor because it doesn't support classifictation output
-class AuthorModel:
+class AuthorModel(Model):
     def __init__(self):
-        self.model = MultiOutputClassifier(LogisticRegression())
+        self.model = MultiOutputClassifier(
+            LogisticRegression(multi_class="multinomial"), vebose=1, n_jobs=8
+        )
         self.binarizer = MultiLabelBinarizer(sparse_output=True)
 
-    def fit(self, features, labels: List[List[str]]):
+    def fit(self, features, labels):
         labels = self.binarizer.fit_transform(labels)
-        self.model.fit(features, labels)
+        self.model = self.model.fit(features, labels)
         return self
 
     def predict(self, features):
         return self.binarizer.inverse_transform(self.model.predict(features))
 
+    def save(self, path: Path):
+        with open(path, "wb") as f:
+            pickle.dump(self.model, f)
+            pickle.dump(self.binarizer, f)
 
-class GenderTransformer:
-    def transform(self, X):
-        return np.array(
-            [
-                [
-                    sum(gender == Gender.MAN for gender in genders),
-                    sum(gender == Gender.WOMAN for gender in genders),
-                ]
-                for genders in X
-            ]
+
+class AuthorGenderModel(PickleModel):
+    def __init__(self):
+        model = MultiOutputRegressor(
+            LogisticRegression(max_iter=1000, verbose=1, n_jobs=8)
         )
+        super().__init__(model)
 
-
-class AuthorGenderModel:
-    def __init__(self):
-        self.model = MultiOutputRegressor(LogisticRegression())
-        self.transfomer = GenderTransformer()
-
-    def fit(self, features, labels):
-        labels = self.transfomer.transform(labels)
-        self.model.fit(features, labels)
-        return self
-
-    def predict(self, features):
-        return self.model.predict(features)
-
-
-class DateModel:
-    def __init__(self):
-        self.model = LogisticRegression()
-
-    def fit(self, features, labels):
+    def score(self, features, labels):
+        res = self.predict(features)
         labels = np.array(labels)
-        self.model.fit(features, labels)
-        return self
+        return f"Men:\n{classification_report(labels[:, 0], res[:, 0])}\nWomen:\n{classification_report(labels[:, 1], res[:, 1])}"
 
-    def predict(self, features):
-        return self.model.predict(features)
+
+class AuthorGenderModelSimple(PickleModel):
+    def __init__(self):
+        model = LogisticRegression(max_iter=1000, verbose=1, n_jobs=8)
+        super().__init__(model)
+
+    def score(self, features, labels):
+        return classification_report(labels, self.predict(features))
+
+
+class DayModel(PickleModel):
+    def __init__(self):
+        model = LogisticRegression(max_iter=1000, verbose=1, n_jobs=8)
+        super().__init__(model)
+
+    def score(self, features, labels):
+        return classification_report(labels, self.predict(features))

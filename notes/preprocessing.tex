@@ -288,6 +288,33 @@
     \subsection{Key findings}
     Overall it was very well parsed. The only problem are those super short articles with long word length.
 
+
+    \section{category}
+    We filtered category to have at most
+    5 words and 35 characters.
+    This prevented some wronly parsed categories, but some still are present.
+    Thos can be filtered by removing
+    category with just one occurance
+
+    \section{Classificatoin}
+    We decided to only use top 50 categories to classify.
+    We decided to train genders based on three types.
+    Mixed/Female/Male.
+
+    \section{Task 1 Server}
+    Below baseline of the most common server = deník.
+    Choosing only that one would yield 0.72 accuracy.
+    This can also be observed at precissoin and recall,
+    which are very hight compared to other values.
+    
+
+
+    
+
+
+
+
+
     
 
 

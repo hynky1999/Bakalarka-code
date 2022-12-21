@@ -3,13 +3,17 @@ import json
 from typing import List
 from article_utils import published_date_to_date
 from dataclasses import dataclass
+from filtering import create_tokenized_filter
 from enum import IntEnum
+import numpy as np
+import pandas as pd
 import re
 
 
 class Gender(IntEnum):
     MAN = 1
     WOMAN = 2
+    MIXED = 3
 
 
 @dataclass
@@ -35,6 +39,7 @@ post_sub_re = re.compile(r"(" + "|".join(post_sub) + r")\s+")
 
 
 def postprocess_author(author):
+    author = preprocess_author(author)
     author = author.lower()
     author = multispace.sub(" ", author)
     author_split = author.split(" ")
@@ -58,10 +63,9 @@ def postprocess_authors(js):
 def guess_gender(author):
     if author == None:
         return None
-    if author.lower().endswith("ová"):
+    if author.lower().strip().endswith("á"):
         return Gender.WOMAN
 
-    # TODO: improve
     return Gender.MAN
 
 
@@ -74,7 +78,7 @@ def filter_author(js):
     for author in authors:
         preproc_auth = preprocess_author(author)
         if is_human_author(preproc_auth):
-            new_authors.append(preproc_auth)
+            new_authors.append(author)
 
     if len(new_authors) == 0:
         js["author"] = None
@@ -87,9 +91,21 @@ non_human_contain = [
     "redakce",
     "redaktor",
     "middlesearch",
+    "center",
+    "global",
     "naše",
+    "investements",
+    "telegraph",
+    "parkhotel",
+    "capital",
+    "europe",
+    "digest",
+    "czech",
     "čtk",
     "usa",
+    "chronicle",
+    "story",
+    "zeitung",
     "/",
     "(",
     ")",
@@ -229,10 +245,23 @@ def postprocess_brief(js):
     return js
 
 
+filters_category = [
+    create_tokenized_filter(lambda x: len(x) <= 5, "category"),
+    lambda x: len(x["category"]) <= 35,
+]
+
+
 def postprocess_category(js):
-    js["category"] = cap_with_dot(js["category"])
-    if js["category"] != None:
-        js["category"] = js["category"].lower()
+    category = cap_with_dot(js["category"])
+    if category != None:
+        # Toktok filter works with dict
+        js["category"] = category
+        if all([f(js) for f in filters_category]):
+            js["category"] = js["category"].lower()
+
+        else:
+            js["category"] = None
+
     return js
 
 
@@ -246,6 +275,21 @@ def add_server(server):
 
 def as_Article(js):
     return js
+
+
+def LowerTopXWhiten(col, limit):
+    def topX_inner(jss):
+        colled = [js[col] for js in jss]
+        as_pd = pd.Series(colled)
+        selected_cats = as_pd.value_counts().head(limit)
+        selected_rows = as_pd.isin(selected_cats.index)
+        for js, selected in zip(jss, selected_rows):
+            if not selected:
+                js[col] = None
+
+        return jss
+
+    return topX_inner
 
 
 class JSONArticleEncoder(json.JSONEncoder):

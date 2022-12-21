@@ -1,8 +1,12 @@
 from dataclasses import dataclass
+from typing import Callable, List
 from article_utils import get_statistics
+from nltk.tokenize.toktok import ToktokTokenizer
 import pandas as pd
 
 from preprocess_utils import is_cz
+
+toktok = ToktokTokenizer()
 
 
 def between(a, b, keep_na=True):
@@ -32,6 +36,18 @@ def create_filter_by_stats(config):
         return all(fc(stats.__dict__[key]) for key, fc in config.items())
 
     return filter_js
+
+
+def create_tokenized_filter(fc: Callable[[List[str]], bool], col, keep_na=True):
+    def filter_toktok(df):
+        data = df[col]
+        if data is None:
+            return keep_na
+
+        tokenized: List[str] = toktok.tokenize(data)
+        return fc(tokenized)
+
+    return filter_toktok
 
 
 def create_filter_by_cz_lang(ratio=1.0):
