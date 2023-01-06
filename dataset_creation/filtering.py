@@ -38,14 +38,17 @@ def create_filter_by_stats(config):
     return filter_js
 
 
-def create_tokenized_filter(fc: Callable[[List[str]], bool], col, keep_na=True):
-    def filter_toktok(df):
-        data = df[col]
+def create_tokenized_filter(fc: Callable[[List[str]], bool], col):
+    def filter_toktok(js: dict) -> dict:
+        data = js[col]
         if data is None:
-            return keep_na
+            return js
 
         tokenized: List[str] = toktok.tokenize(data)
-        return fc(tokenized)
+        if not fc(tokenized):
+            js[col] = None
+
+        return js
 
     return filter_toktok
 
