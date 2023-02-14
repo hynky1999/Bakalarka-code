@@ -147,19 +147,20 @@ def show_df_lines(df, filename, mod=lambda x: x):
         print(mod(i))
 
 
-def get_unique(file, col):
+def get_unique(files, col):
     u_vals = dict()
-    for js in load_jsonb(file):
-        js_list = js[col]
-        if js_list == None:
-            continue
+    for file in files:
+        for js in load_jsonb(file):
+            js_list = js[col]
+            if js_list == None:
+                continue
 
-        if not isinstance(js_list, list):
-            js_list = [js_list]
+            if not isinstance(js_list, list):
+                js_list = [js_list]
 
-        for js_val in js_list:
-            val = u_vals.get(js_val, 0)
-            u_vals[js_val] = val + 1
+            for js_val in js_list:
+                val = u_vals.get(js_val, 0)
+                u_vals[js_val] = val + 1
     return u_vals
 
 

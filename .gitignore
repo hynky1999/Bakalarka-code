@@ -465,3 +465,7 @@ TSWLatexianTemp*
 
 # JSONB
 *.jsonb
+
+# Models
+**/checkpoint*/*
+**/cache/*

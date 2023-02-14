@@ -11,9 +11,40 @@ import re
 
 
 class Gender(IntEnum):
-    MAN = 1
-    WOMAN = 2
-    MIXED = 3
+    MAN = 0
+    WOMAN = 1
+    MIXED = 2
+
+
+def filter_by_list(col, filter_list, lower=False):
+    l = filter_list
+    if lower:
+        l = [x.lower() for x in filter_list]
+
+    def filter_by_list_inner(js):
+        val = js[col]
+        if val is None:
+            return js
+
+        val = val.lower() if lower else val
+        if not val in l:
+            js[col] = None
+        return js
+
+    return filter_by_list_inner
+
+
+def translate(col, translate_dict, lower=False):
+    def translate_inner(js):
+        if js[col] is None:
+            return js
+        val = js[col].lower() if lower else js[col]
+        if val in translate_dict:
+            js[col] = translate_dict[val]
+
+        return js
+
+    return translate_inner
 
 
 @dataclass
@@ -25,7 +56,7 @@ class Article:
     content: str
     category: str | None
     authors: List[str] | None
-    author_genders: List[Gender] | None
+    authors_gender: List[Gender] | None
     date: str | None
     day: int | None
 
@@ -54,7 +85,7 @@ def postprocess_authors(js):
         if js["author"]
         else None
     )
-    js["author_genders"] = (
+    js["authors_gender"] = (
         list(map(guess_gender, js["author"])) if js["author"] else None
     )
     return js
@@ -245,23 +276,13 @@ def postprocess_brief(js):
     return js
 
 
-filters_category = [
-    create_tokenized_filter(lambda x: len(x) <= 5, "category"),
-    lambda x: len(x["category"]) <= 35,
-]
-
-
 def postprocess_category(js):
-    category = cap_with_dot(js["category"])
+    category = js["category"]
     if category != None:
-        # Toktok filter works with dict
-        js["category"] = category
-        if all([f(js) for f in filters_category]):
-            js["category"] = js["category"].lower()
+        category = category.lower()
 
-        else:
-            js["category"] = None
-
+    category = cap_with_dot(category)
+    js["category"] = category
     return js
 
 
@@ -273,23 +294,22 @@ def add_server(server):
     return add_server_inner
 
 
-def as_Article(js):
+def add_cum_gender(js):
+    genders = js["authors_gender"]
+    g_type: Gender | None = None
+    if genders is not None:
+        for g in Gender:
+            if all(gender == g for gender in genders):
+                g_type = g
+                break
+        if g_type == None:
+            g_type = Gender.MIXED
+    js["cum_gender"] = g_type
     return js
 
 
-def LowerTopXWhiten(col, limit):
-    def topX_inner(jss):
-        colled = [js[col] for js in jss]
-        as_pd = pd.Series(colled)
-        selected_cats = as_pd.value_counts().head(limit)
-        selected_rows = as_pd.isin(selected_cats.index)
-        for js, selected in zip(jss, selected_rows):
-            if not selected:
-                js[col] = None
-
-        return jss
-
-    return topX_inner
+def as_Article(js):
+    return js
 
 
 class JSONArticleEncoder(json.JSONEncoder):
