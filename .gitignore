@@ -469,3 +469,6 @@ TSWLatexianTemp*
 # Models
 **/checkpoint*/*
 **/cache/*
+
+# TMP.o
+TMP.o
