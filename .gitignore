@@ -472,3 +472,5 @@ TSWLatexianTemp*
 
 # TMP.o
 TMP.o
+
+*.pkl
