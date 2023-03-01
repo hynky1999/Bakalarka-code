@@ -5,6 +5,8 @@ from article_utils import published_date_to_date
 from dataclasses import dataclass
 from filtering import create_tokenized_filter
 from enum import IntEnum
+from html import unescape
+from unicodedata import normalize
 import numpy as np
 import pandas as pd
 import re
@@ -16,22 +18,33 @@ class Gender(IntEnum):
     MIXED = 2
 
 
-def filter_by_list(col, filter_list, lower=False):
-    l = filter_list
+def filter_by_set(col, filter_set, lower=False):
+    l = filter_set
     if lower:
-        l = [x.lower() for x in filter_list]
+        l = set(x.lower() for x in filter_set)
 
-    def filter_by_list_inner(js):
+    def filter_by_set_inner(js):
         val = js[col]
         if val is None:
             return js
+        is_list = isinstance(val, list)
+        val = [val] if not is_list else val
 
-        val = val.lower() if lower else val
-        if not val in l:
+        kept_vals = []
+        for v in val:
+            v_lower = v.lower() if lower else v
+            if v_lower in l:
+                kept_vals.append(v)
+
+        if len(kept_vals) == 0:
             js[col] = None
+        elif not is_list:
+            js[col] = kept_vals[0]
+        else:
+            js[col] = kept_vals
         return js
 
-    return filter_by_list_inner
+    return filter_by_set_inner
 
 
 def translate(col, translate_dict, lower=False):
@@ -58,15 +71,69 @@ class Article:
     authors: List[str] | None
     authors_gender: List[Gender] | None
     date: str | None
-    day: int | None
+    day: str | None
 
 
 # AUTHORS
 multispace = re.compile(r"\s+")
 
 
-post_sub = ["připravila?", "přeložila?"]
-post_sub_re = re.compile(r"(" + "|".join(post_sub) + r")\s+")
+post_sub = [
+    "pro téma",
+    "pro právo",
+    "pro atm",
+    "pro .*dnes(\\.cz)?(\\))?",
+    "idnes" "bc(\\.?)",
+    "čtk",
+    "mgr(\\.?)",
+    "ing(\\.?)",
+    "phdr(\\.?)",
+    "prof(\\.?)",
+    "doc(\\.?)",
+    "mudr(\\.?)",
+]
+pre_sub = [
+    "připravil(a|i)?",
+    "přeložil(a|i)?",
+    "zpracoval(a|i)?",
+    "zaznamenal(a|i)?",
+    "upravil(a|i)?",
+    "rozhovor vedli",
+    "daňová poradkyně",
+    "vizualizace",
+    "advokát(ka)?",
+    "právní(k|ci)",
+    "etoložka",
+    "čtenář(ka)?",
+    "stránku připravil(a|i)?",
+    "kartářka",
+    "zahradní architekt(ka)?",
+    "kritik",
+    "mykoložka",
+    "astroložka",
+    "politolog",
+    "překlad",
+    "(odborná)? spolupráce",
+    "spolupacoval(a|i)?",
+    "redakčně připravil(a|i)?",
+    "text(:)?",
+    "recenze",
+    "kardinál",
+    "pro právo",
+    "pro téma",
+    "pro .*dnes(\\.cz)?",
+    "pro novinky(\\.cz)?",
+    "bc(\\.?)",
+    "mgr(\\.?)",
+    "ing(\\.?)",
+    "phdr(\\.?)",
+    "prof(\\.?)",
+    "doc(\\.?)",
+    "mudr(\\.?)",
+    "lord",
+]
+pre_sub_re = re.compile(r"^(" + "|".join(pre_sub) + r")\s+", re.IGNORECASE)
+post_sub_re = re.compile(r"(" + "|".join(post_sub) + r")$", re.IGNORECASE)
 
 
 def postprocess_author(author):
@@ -76,6 +143,7 @@ def postprocess_author(author):
     author_split = author.split(" ")
     author_split_capitalized = [x.capitalize() for x in author_split]
     author = " ".join(author_split_capitalized)
+    author = normalize_text(author)
     return author
 
 
@@ -85,19 +153,19 @@ def postprocess_authors(js):
         if js["author"]
         else None
     )
-    js["authors_gender"] = (
-        list(map(guess_gender, js["author"])) if js["author"] else None
-    )
     return js
 
 
-def guess_gender(author):
-    if author == None:
-        return None
-    if author.lower().strip().endswith("á"):
-        return Gender.WOMAN
 
-    return Gender.MAN
+def add_gender(gender_mapping):
+    def _add_gender(js):
+        js["authors_gender"] = (
+            list(map(lambda auth: gender_mapping.get(auth, None), js["author"])) if js["author"] else None)
+        return js
+
+    return _add_gender
+
+
 
 
 def filter_author(js):
@@ -118,89 +186,32 @@ def filter_author(js):
     return js
 
 
-non_human_contain = [
-    "redakce",
-    "redaktor",
-    "middlesearch",
-    "center",
-    "global",
-    "naše",
-    "investements",
-    "telegraph",
-    "parkhotel",
-    "capital",
-    "europe",
-    "digest",
-    "czech",
-    "čtk",
-    "usa",
-    "chronicle",
-    "story",
-    "zeitung",
-    "/",
-    "(",
-    ")",
-    "škola",
-    "seznam",
-    "agency",
-    "post",
-    "s.r.o",
-    "scientist",
-    "washington",
-    "banka",
-    "manažer",
-    "www",
-    "journal",
-    "komerč",
-    "české",
-    "akademie",
-    "blue",
-    "avon",
-    "consultancy",
-    "group",
-    "times",
-    "international",
-    "ftv",
-    "news",
-    "rádio",
-    "program",
-    "poradce",
-    "york",
-    "broker",
-    "čtenář",
-    "materiál",
-    "reporté",
-    "návod",
-    "tým",
-    "český",
-    "rozhlas",
-    "press",
-    "generál",
-    "předseda",
-    "mail",
-    "novinky",
-    "aktualne",
-    "čr",
-    "bank",
-    "pojištovna",
-    "idnes",
-    "online",
-    "deník",
-    "časopis",
-    "irozhlas",
-    "společnost",
-    "tv",
-    "radio",
-    "rádio",
-    "swiss",
-    "město",
-]
 contains_number = re.compile("[0-9]")
 
 
+def apply_until_not_changed(f, x):
+    while True:
+        y = f(x)
+        if x == y:
+            return x
+        x = y
+
+
 def preprocess_author(author):
-    author = author.strip()
-    return author.strip().split("|")[0]
+    # Name like "Jiří Novák | autor" -> "Jiří Novák"
+    splitted = author.split("|")[0]
+    # Name like "Jiří Novák - autor" -> "Jiří Novák"
+    # Spacing is important !!!!!!
+    splitted = splitted.split(" - ")[0]
+    # Name like "Jiří Novák (autor)" -> "Jiří Novák"
+    splitted = splitted.split("(")[0]
+    splitted = splitted.split("[")[0]
+    striped = splitted.strip()
+
+    # ADD UNTIL NOT CHANGED
+    pre_subbed = apply_until_not_changed(lambda x: pre_sub_re.sub("", x), striped)
+    post_subbed = apply_until_not_changed(lambda x: post_sub_re.sub("", x), pre_subbed)
+    return post_subbed.strip()
 
 
 def is_capitalized(word):
@@ -218,12 +229,6 @@ def is_human_author(author):
     if len(splitted) > 4 or len(splitted) < 2:
         return False
 
-    # Either all upper caps or capilized first letter
-    if not all([is_capitalized(word) for word in splitted]) and not all(
-        [is_upper(word) for word in splitted]
-    ):
-        return False
-
     # At least 2 letters in every word
     if not all([len(word) > 2 for word in splitted]):
         return False
@@ -232,9 +237,6 @@ def is_human_author(author):
         return False
 
     if contains_number.search(author):
-        return False
-
-    if any([x in author.lower() for x in non_human_contain]):
         return False
 
     return True
@@ -255,24 +257,47 @@ def cap_with_dot(headline):
     return headline
 
 
+DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
 # DATE
 def postprocess_date(js):
     date = published_date_to_date(js["publication_date"])
-    day = date.weekday() if date else None
+    day = DAYS[date.weekday()] if date else None
     js["date"] = date
     js["day"] = day
     return js
 
 
+re_multispace = re.compile(r"\s+")
+
+
+def normalize_text(text):
+    if text == None:
+        return None
+
+    text = text.strip()
+    text = text.replace("\n", " ")
+    text = text.replace("\t", " ")
+    text = text.replace("\r", " ")
+    text = re_multispace.sub(" ", text)
+    text = unescape(text)
+    text = normalize("NFKC", text)
+    return text
+
+
 # HEADLINE
 def postprocess_headline(js):
-    js["headline"] = cap_with_dot(js["headline"])
+    js["headline"] = normalize_text(cap_with_dot(js["headline"]))
     return js
 
 
 # BRIEF
 def postprocess_brief(js):
-    js["brief"] = cap_with_dot(js["brief"])
+    js["brief"] = normalize_text(cap_with_dot(js["brief"]))
+    return js
+
+
+def postprocess_content(js):
+    js["content"] = normalize_text(js["content"])
     return js
 
 
@@ -315,7 +340,7 @@ def as_Article(js):
 class JSONArticleEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Gender):
-            return obj.value
+            return obj.name
 
         if isinstance(obj, datetime.date):
             return str(obj)
