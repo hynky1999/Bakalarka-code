@@ -472,3 +472,11 @@ TSWLatexianTemp*
 
 # TMP.o
 TMP.o
+
+*.pkl
+
+# logs
+**/logs/
+
+# Wandb
+**/wandb/
