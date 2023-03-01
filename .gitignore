@@ -480,3 +480,6 @@ TMP.o
 
 # Wandb
 **/wandb/
+
+# Arrows
+*.arrow
