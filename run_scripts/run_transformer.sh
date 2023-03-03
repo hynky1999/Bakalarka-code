@@ -11,16 +11,12 @@ mkdir -p "$LOG_FOLDER"
 
 echo "Running transformer for $COL with id $ID"
 
-sbatch \
+srun \
 -p gpu \
 --mem=16G \
 --gres=gpu:"$NUM_GPU" \
 --job-name="transformer_$COL" \
 -e "$LOG_FOLDER/$COL.err" \
 -o "$LOG_FOLDER/$COL.out" \
-~/non_runable/venv_run.sh \
-Modelling/Transformers/train_transformer.py \
-"hynky/czech_news_dataset" \
-"Modelling/Transformers/models/$COL" \
-$COL \
---model_id "$ID" \
+~/non_runable/NLP_venv/bin/python3 \
+Modelling/Transformers/train_transformer.py
