@@ -1,0 +1,65 @@
+model:
+  class_path: models.FineTunedClassifier
+  init_args:
+    class_num: 6
+    pretrained_model: "ufal/robeczech-base"
+
+data:
+  class_path: datamodules.NewsDataModule
+  init_args:
+    column: server
+    tokenizer: "ufal/robeczech-base"
+    cache_dir: "/home/kydliceh/.cache/"
+    batch_size: 128
+    num_proc: 4
+    pad_all: True
+    limit: 1000
+
+trainer:
+  default_root_dir: "Modelling/Transformers/server/models"
+  logger:
+    class_path: lightning.pytorch.loggers.wandb.WandbLogger
+    init_args:
+      project: Server-Deep-Learning
+      log_model: True
+      id: "RobeCzech-Baseline"
+  max_epochs: 4
+  accelerator: "gpu"
+  # strategy: "ddp"
+  devices: 1
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.timer.Timer
+      init_args:
+        duration: "00:12:00:00"
+        interval: "step"
+
+    - class_path: lightning.pytorch.callbacks.early_stopping.EarlyStopping
+      init_args:
+        monitor: "val/loss_epoch"
+        patience: 2
+        verbose: True
+        mode: "min"
+    - class_path: lightning.pytorch.callbacks.lr_monitor.LearningRateMonitor
+      init_args:
+        logging_interval: "step"
+  
+    - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
+      init_args:
+        monitor: "val/loss_epoch"
+        mode: "min"
+        save_top_k: 5
+        verbose: True
+
+
+  enable_model_summary: True
+  enable_progress_bar: True
+  log_every_n_steps: 1000
+  val_check_interval: 0.2
+    
+
+        
+
+
+
+
+    
