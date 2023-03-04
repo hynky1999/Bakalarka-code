@@ -1,0 +1,152 @@
+# lightning.pytorch==1.9.3
+seed_everything: 88
+trainer:
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      name: null
+      save_dir: Modelling/Transformers/projects/
+      version: null
+      offline: false
+      dir: null
+      id: null
+      anonymous: null
+      project: Server-Deep-Learning
+      log_model: true
+      experiment: null
+      prefix: ''
+      checkpoint_name: null
+      job_type: null
+      config: null
+      entity: null
+      reinit: null
+      tags: null
+      group: null
+      notes: null
+      magic: null
+      config_exclude_keys: null
+      config_include_keys: null
+      mode: null
+      allow_val_change: null
+      resume: null
+      force: null
+      tensorboard: null
+      sync_tensorboard: null
+      monitor_gym: null
+      save_code: null
+      settings: null
+  enable_checkpointing: true
+  callbacks:
+  - class_path: lightning.pytorch.callbacks.Timer
+    init_args:
+      duration: 00:12:00:00
+      interval: step
+      verbose: true
+  - class_path: lightning.pytorch.callbacks.EarlyStopping
+    init_args:
+      monitor: val/f1_macro_epoch
+      min_delta: 0.0
+      patience: 4
+      verbose: true
+      mode: min
+      strict: true
+      check_finite: true
+      stopping_threshold: null
+      divergence_threshold: null
+      check_on_train_epoch_end: null
+      log_rank_zero_only: false
+  - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    init_args:
+      logging_interval: step
+      log_momentum: false
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: null
+      filename: null
+      monitor: val/f1_macro_epoch
+      verbose: true
+      save_last: null
+      save_top_k: 3
+      save_weights_only: false
+      mode: min
+      auto_insert_metric_name: true
+      every_n_train_steps: null
+      train_time_interval: null
+      every_n_epochs: null
+      save_on_train_epoch_end: null
+  default_root_dir: null
+  gradient_clip_val: null
+  gradient_clip_algorithm: null
+  num_nodes: 1
+  num_processes: null
+  devices: 7
+  gpus: null
+  auto_select_gpus: null
+  tpu_cores: null
+  ipus: null
+  enable_progress_bar: true
+  overfit_batches: 0.0
+  track_grad_norm: -1
+  check_val_every_n_epoch: 1
+  fast_dev_run: false
+  accumulate_grad_batches: null
+  max_epochs: null
+  min_epochs: null
+  max_steps: -1
+  min_steps: null
+  max_time: null
+  limit_train_batches: null
+  limit_val_batches: null
+  limit_test_batches: null
+  limit_predict_batches: null
+  val_check_interval: 0.2
+  log_every_n_steps: 10
+  accelerator: gpu
+  strategy: ddp
+  sync_batchnorm: false
+  precision: 32
+  enable_model_summary: true
+  num_sanity_val_steps: 2
+  resume_from_checkpoint: null
+  profiler: null
+  benchmark: null
+  deterministic: null
+  reload_dataloaders_every_n_epochs: 0
+  auto_lr_find: false
+  replace_sampler_ddp: true
+  detect_anomaly: false
+  auto_scale_batch_size: false
+  plugins: null
+  amp_backend: null
+  amp_level: null
+  move_metrics_to_cpu: false
+  multiple_trainloader_mode: max_size_cycle
+  inference_mode: true
+tune: false
+fit: true
+test: true
+validate: false
+model:
+  class_path: models.FineTunedClassifier
+  init_args:
+    pretrained_model: ufal/robeczech-base
+    class_num: 6
+    lr: 2.0e-05
+    warmup_steps: 1000
+    betas:
+    - 0.9
+    - 0.98
+    eps: 1.0e-08
+    weight_decay: 0.0
+data:
+  class_path: datamodules.NewsDataModule
+  init_args:
+    column: server
+    tokenizer: ufal/robeczech-base
+    cache_dir: /home/kydliceh/.cache/
+    max_length: 512
+    batch_size: 11
+    limit: null
+    pad_mode: longest
+    num_proc: 4
+    trunc_type: start
