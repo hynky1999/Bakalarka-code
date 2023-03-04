@@ -68,7 +68,7 @@ def create_tokenized_filter(fc: Callable[[List[str]], bool], col):
 
 
 def create_filter_by_cz_lang(ratio=1.0):
-    def filter_cz(js):
-        return is_cz(js["content"]) >= ratio
+    def filter_cz(content):
+        return is_cz(content) >= ratio
 
     return filter_cz

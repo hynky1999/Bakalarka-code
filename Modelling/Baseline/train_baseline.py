@@ -256,5 +256,5 @@ if __name__ == "__main__":
     print(args.features)
     print(args.score_type)
     args.output_path = args.output_path / f"{args.model_id}"
-    args.output_path.mkdir(parents=True, exist_ok=True)
+    args.output_path.mkdir(parents=True)
     run(args)
