@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=80gb
+#SBATCH --mem=30gb
 #SBATCH --time=2-00:00:00
 #SBATCH --job-name="baseline-sweeper"
 #SBATCH --err "run_scripts/logs/baseline.err"
