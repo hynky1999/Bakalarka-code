@@ -1,0 +1,7 @@
+defaults:
+  - override hydra/launcher: submitit_slurm
+
+cpus-per-task: 1
+mem: 10G
+timeout_min: 1440
+

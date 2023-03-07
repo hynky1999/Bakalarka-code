@@ -1,8 +1,13 @@
-from typing import List
+from typing import Any, Callable, Iterable, List
 from datasets import load_from_disk, Dataset
 from pathlib import Path
+from sklearn.linear_model import LogisticRegression
+from sklearn.base import BaseEstimator
 from datasets import concatenate_datasets
+import hydra
+from omegaconf import DictConfig, OmegaConf
 from sklearn.model_selection import PredefinedSplit
+from sklearn.metrics import confusion_matrix, get_scorer
 from imblearn.pipeline import Pipeline, make_pipeline
 from imblearn import FunctionSampler
 from sklearn.model_selection import PredefinedSplit, GridSearchCV
@@ -15,16 +20,22 @@ from scipy.sparse import vstack, hstack
 from stop_words import get_stop_words
 from datetime import datetime
 from functools import partial
-from baseline_utils import dummy, preprocess_tokenized, removeZero, pandas_reshaper, to_pandas
 from create_baseline_dataset import get_tokenizer, add_tokenized
 from datasets import load_dataset
 import argparse
+import scipy
 import pickle
 import numpy as np
 import pandas as pd
-import joblib
-import json
 import wandb
+from dataclasses import dataclass
+from hydra.utils import to_absolute_path, instantiate
+from baseline_utils import dummy, preprocess_tokenized, removeMinus,  pandas_reshaper, to_pandas
+from omegaconf import OmegaConf
+import json
+
+
+
 
 def count_non_zero(x):
     return np.count_nonzero(x)
@@ -46,38 +57,54 @@ def train(x_train, y_train, x_eval, y_eval, model: Pipeline):
 def report_cv_results(cv_results):
     df = pd.DataFrame(cv_results)
     # iterate over df rows and return dict
-    for index, row in df.iterrows():
-        log_dict = {}
-        for k, v in row.items():
-            if k.startswith("param"):
-                continue
-            k = k.replace("split0_", "")
-            k = k.replace("test", "val")
-            for split in ["val", "train"]:
-                if f"{split}_" in k:
-                    k = k.replace(f"{split}_", "")
-                    k = f"{split}/{k}"
-
-            log_dict[k] = v
-
-        wandb.log(log_dict)
+    
+    all_columns = df.columns
+    scores = [x for x in all_columns if x.startswith("split0_")]
+    stats = ["mean_fit_time", "std_fit_time"]
+    df = df[["params"] + scores + stats]
+    df = df.rename(columns={x: x.replace("split0_", "") for x in scores})
 
 
-def test(x_test: Dataset, y_test, model: Pipeline, labels):
+    wandb.log({"cv_results": df})
+
+
+class DummyEstimator(BaseEstimator):
+    def fit(self, x, y):
+        return self
+
+    def predict(self, x):
+        return x
+
+    def predict_proba(self, x):
+        return x
+
+def log_confusion_matrix(y_test, predictions_labels, labels, title):
+    cfs = confusion_matrix(y_test, predictions_labels, labels=range(len(labels)))
+    data = [[labels[i], labels[j] ,cfs[i, j]] for i,j in np.ndindex(cfs.shape)]
+    fields = [
+        "Actual",
+        "Predicted",
+        "nPredictions",
+    ]
+       
+    wandb.log({title: wandb.Table(data=data, columns=fields)})
+    
+
+
+
+def test(x_test: Dataset, y_test, model: Pipeline, labels, col, n_proc):
+    # Must be filtred as the minusDrop is not applied to predictions
+    # Still zero in dataset
+    x_test = filter_zero(x_test, col, n_proc)
+    # Already -1 in y
+    y_test = y_test[y_test >= 0]
+
+
+
     predictions_prob = model.predict_proba(x_test)
     predictions_labels = np.argmax(predictions_prob, axis=1)
-    wandb.sklearn.plot_roc(y_test, predictions_prob, labels)
-    wandb.sklearn.plot_confusion_matrix(y_test, predictions_labels, labels)
-    wandb.log({f"test/{s}": score_fc(model, x_test, y_test) for s, score_fc in model.named_steps["search"].scorer_.items()})
-
-
-
-
-
-
-
-
-
+    log_confusion_matrix(y_test, predictions_labels, labels, f"{x_test.split}/confusion matrix")
+    wandb.log({f"{x_test.split}/{s}": score_fc(DummyEstimator(), y_test, predictions_labels) for s, score_fc in model.named_steps["search"].scorer_.items()})
 
 def create_columns(used_features, lowercase, max_features, ngram_range, min_df, max_df):
     tfidf = TfidfVectorizer(
@@ -117,30 +144,32 @@ def create_columns(used_features, lowercase, max_features, ngram_range, min_df, 
     return columns
 
 
-def create_model(columns, cv, params, tokenizer, metadata, scores: List[str], n_proc=-1):
-    lr = LogisticRegression(verbose=2, solver='saga', random_state=42, multi_class='multinomial')
+def create_model(model_args, columns, cv, params, tokenizer, metadata, scores: List[str], n_proc=-1):
+    model = instantiate(model_args)
     cv_search = GridSearchCV(
-        lr,
+        model,
         cv=cv,
         param_grid=params,
         return_train_score=True,
         n_jobs=n_proc,
         verbose=1,
-        scoring=scores,
+        scoring=tuple(scores),
         refit=scores[0],
     )
     tok_n_proc = n_proc if n_proc > 0 else None
 
     model = Pipeline([
-                      ("tokenize", FunctionTransformer(partial(add_tokenized, tokenizer, metadata, tok_n_proc), validate=False)),
+                      ("tokenize", FunctionTransformer(partial(add_tokenized, tokenizer=tokenizer, metadata=metadata, num_proc=tok_n_proc), validate=False)),
                       ("to_pandas", FunctionTransformer(to_pandas, validate=False)),
                       ("columns", columns),
-                      ("drop_None", FunctionSampler(func=removeZero)),
+                      ("drop_None", FunctionSampler(func=removeMinus)),
                        ("search", cv_search)], verbose=True)
     return model
 
 
 def save_model(model, output_path):
+    output_path.mkdir(parents=True, exist_ok=True)
+
     with open(output_path / "model.pkl", "wb") as f:
         pickle.dump(model, f)
 
@@ -151,110 +180,71 @@ def save_model(model, output_path):
 
 
 def prepare_y(dataset, col):
-    return np.array(dataset[col])
+    return np.array(dataset[col]) - 1
 
 
-def run(args):
-    wandb.init(project=f"baseline_{args.col}", config=vars(args))
-    train_dataset = load_dataset(str(args.dataset_path), split="train")
-    eval_dataset = load_dataset(str(args.dataset_path), split="validation")
-    test_dataset = load_dataset(str(args.dataset_path), split="test")
+@hydra.main(version_base="1.1", config_path="./config", config_name="config")
+def main(cfg: DictConfig):
+
+    wandb.init(project=f"Baseline-{cfg.task.column.capitalize()}", config=vars(cfg), mode=cfg.logger.mode)
+    print("Loading data...")
+    train_dataset = load_dataset(str(cfg.data.dataset_path), split="train")
+    eval_dataset = load_dataset(str(cfg.data.dataset_path), split="validation")
+    test_dataset = load_dataset(str(cfg.data.dataset_path), split="test")
 
 
-    if args.limit is not None:
-        train_dataset = train_dataset.select(range(args.limit))
-        eval_dataset = eval_dataset.select(range(args.limit))
-        test_dataset = test_dataset.select(range(args.limit))
+    if cfg.data.limit is not None:
+        train_dataset = train_dataset.select(range(cfg.data.limit))
+        eval_dataset = eval_dataset.select(range(cfg.data.limit))
+        test_dataset = test_dataset.select(range(cfg.data.limit))
 
 
-    train_eval_filtered = filter_zero(train_dataset, args.col, n_proc=args.n_proc)
-    test_filtered = filter_zero(test_dataset, args.col, n_proc=args.n_proc)
-    wandb.sklearn.plot_class_proportions(train_eval_filtered[args.col], test_filtered[args.col], train_dataset.features[args.col].names)
+    train_eval_filtered = filter_zero(train_dataset, cfg.task.column, n_proc=cfg.n_proc)
+    test_filtered = filter_zero(test_dataset, cfg.task.column, n_proc=cfg.n_proc)
+    wandb.sklearn.plot_class_proportions(train_eval_filtered[cfg.task.column], test_filtered[cfg.task.column], train_dataset.features[cfg.task.column].names)
 
 
-    y_train = prepare_y(train_dataset, args.col)
-    y_eval = prepare_y(eval_dataset, args.col)
+    y_train = prepare_y(train_dataset, cfg.task.column)
+    y_eval = prepare_y(eval_dataset, cfg.task.column)
 
-    columns = create_columns(args.features, lowercase=args.lowercase, max_features=args.max_features, ngram_range=args.ngram_range, min_df=args.min_df, max_df=args.max_df)
-    non_zero_train, non_zero_eval = np.count_nonzero(y_train), np.count_nonzero(y_eval)
+    columns = create_columns(cfg.tfidf.features, lowercase=cfg.tfidf.lowercase, max_features=cfg.tfidf.max_features, ngram_range=tuple(cfg.tfidf.ngram_range), min_df=cfg.tfidf.min_df, max_df=cfg.tfidf.max_df)
+    train_split_size, eval_split_size = np.sum(y_train != -1), np.sum(y_eval != -1)
     train_eval_split = PredefinedSplit(
-        test_fold=[-1] * non_zero_train + [1] * non_zero_eval
+        test_fold=[-1] * train_split_size + [1] * eval_split_size
     )
-    wandb.log({"Real size": non_zero_train + non_zero_eval})
-    cv_params = prepare_cv_args(args)
+    wandb.log({"Real size": train_split_size + eval_split_size})
 
     model = create_model(
+        cfg.model.model,
         columns,
         train_eval_split,
-        cv_params,
-        args.tokenizer,
-        args.features,
-        args.score_type,
-        args.n_proc,
+        OmegaConf.to_container(cfg.search.cv_params),
+        cfg.tfidf.tokenizer,
+        cfg.tfidf.features,
+        cfg.score_types,
+        cfg.n_proc,
     )
 
     # We use pretokenized data
-    trained_model = train(train_dataset, y_train, eval_dataset, y_eval, model)
-    save_model(trained_model, args.output_path)
-    labels = train_dataset.features[args.col].names
+    labels = train_dataset.features[cfg.task.column].names[1:]
+    if cfg.run.train:
+        trained_model = train(train_dataset, y_train, eval_dataset, y_eval, model)
+        save_model(trained_model, Path(to_absolute_path(cfg.output_path)) / cfg.task.column / wandb.run.id)
+        test(train_dataset, y_train, trained_model, labels, cfg.task.column, cfg.n_proc)
+        test(eval_dataset, y_eval, trained_model, labels, cfg.task.column, cfg.n_proc)
 
-    test(test_dataset, prepare_y(test_filtered, args.col), trained_model, labels)
+    else:
+        trained_model = load_model(Path(to_absolute_path(cfg.model_checkpoint)))
 
-
-def parse_ngram_range(s):
-    return tuple(s.split("-"))
-
-
-def prepare_cv_args(args):
-    params = {}
-    for key, value in vars(args).items():
-        if (not isinstance(value, list)) or len(value) == 0:
-            continue
-
-        if key.startswith("lr__"):
-            params[key[4:]] = value
-
-    return params
+    if cfg.run.test:
+        test(test_dataset, prepare_y(test_filtered, cfg.task.column), trained_model, labels, cfg.task.column, cfg.n_proc)
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dataset_path", type=Path)
-    parser.add_argument("output_path", type=Path)
-    parser.add_argument("col", type=str)
-    parser.add_argument("--limit", type=int, nargs="?", default=None)
-    parser.add_argument(
-        "--features",
-        type=str,
-        nargs="*",
-        default=["words", "non_alpha", "digits", "upercase", "capitalized"],
-    )
-    parser.add_argument(
-        "--model_id",
-        type=str,
-        nargs="?",
-        default=datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
-    )
-    parser.add_argument("--score_type", type=str, nargs="+", default=["f1_macro"])
-    parser.add_argument("--tokenizer", type=str, nargs="?", default="moses")
-    parser.add_argument("--n_proc", type=int, nargs="?", default=-1)
-    parser.add_argument("--lr__C", type=float, nargs="*", default=[0.1, 1, 10, 100])
-    parser.add_argument("--lr__tol", type=float, nargs="*", default=[1e-4])
-    parser.add_argument("--lr__max_iter", type=int, nargs="*", default=[350])
-    parser.add_argument("--lowercase", type=bool, nargs="?", default=True)
-    parser.add_argument("--max_features", type=int, nargs="?", default=None)
-    parser.add_argument(
-        "--ngram_range", type=parse_ngram_range, nargs="?", default=(1, 2)
-    )
-    parser.add_argument("--min_df", type=int, nargs="?", default=70)
-    parser.add_argument("--max_df", type=float, nargs="?", default=0.3)
-    return parser.parse_args()
 
+def load_model(model_path):
+    with open(model_path, "rb") as f:
+        model = pickle.load(f)
+    return model
 
 if __name__ == "__main__":
-    args = get_args()
-    print(args.features)
-    print(args.score_type)
-    args.output_path = args.output_path / f"{args.model_id}"
-    args.output_path.mkdir(parents=True)
-    run(args)
+    main()

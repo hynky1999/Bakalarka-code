@@ -1,0 +1,13 @@
+min_df: 90
+max_df: 0.08
+ngram_range: [1, 2]
+max_features:
+lowercase: true
+features:
+- 'words'
+- 'non_alpha'
+- 'digits'
+- 'upercase'
+- 'capitalized'
+
+tokenizer: 'moses'

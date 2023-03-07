@@ -1,0 +1,15 @@
+run:
+  fit: False
+  test: False
+  validate: False
+  tune: False
+
+seed: 42
+chckpt_path: null
+
+defaults:
+  - model: trans
+  - trainer: gpu_single
+  - data: base
+  - logger: wandb
+

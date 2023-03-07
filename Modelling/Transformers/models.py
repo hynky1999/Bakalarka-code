@@ -17,20 +17,20 @@ class FineTunedClassifier(LightningModule):
     def __init__(
         self,
         pretrained_model,
-        class_num,
+        num_classes,
         lr=2e-5,
-        warmup_steps=1000,
-        betas=(0.9, 0.98),
+        warmup_steps: int | float = 0.1,
+        betas=(0.9, 0.999),
         eps=1e-08,
         weight_decay=0.0,
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.pretrained_model = self.get_model(pretrained_model, class_num)
+        self.pretrained_model = self.get_model(pretrained_model, num_classes)
         self.metrics = ModuleDict({
-            "train_metrics": ModuleList(create_train_metrics(class_num)),
-            "val_metrics": ModuleList(create_val_metrics(class_num)),
-            "test_metrics": ModuleList(create_test_metrics(class_num))
+            "train_metrics": ModuleList(create_train_metrics(num_classes)),
+            "val_metrics": ModuleList(create_val_metrics(num_classes)),
+            "test_metrics": ModuleList(create_test_metrics(num_classes))
         })
 
     def get_model(self, model_chp, num_dim):
@@ -82,10 +82,14 @@ class FineTunedClassifier(LightningModule):
             betas=self.hparams.betas,
         )
 
+        total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = self.hparams.warmup_steps if self.hparams.warmup_steps > 1 else int(total_steps * self.hparams.warmup_steps)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.hparams.warmup_steps,
-            num_training_steps=self.trainer.estimated_stepping_batches,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps,
         )
+        print("Total steps: ", total_steps)
+        print("Warmup steps: ", warmup_steps)
         scheduler = {"scheduler": scheduler, "interval": "step", "frequency": 1}
         return [optimizer], [scheduler]

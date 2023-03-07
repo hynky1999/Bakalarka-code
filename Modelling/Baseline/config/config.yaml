@@ -1,0 +1,20 @@
+score_types:
+- 'f1_macro'
+- 'f1_micro'
+- 'accuracy'
+
+n_proc: 4
+output_path: "Modelling/Baseline/models"
+
+logger:
+  mode: online
+
+
+search:
+  cv_params: {}
+
+
+defaults:
+  - data: base_tfidf
+  - model: logistic_regression
+  - tfidf: base

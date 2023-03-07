@@ -9,9 +9,8 @@ trainer:
       version: null
       offline: false
       dir: null
-      id: null
+      id: soxen2v4
       anonymous: null
-      project: Server-Deep-Learning
       log_model: true
       experiment: null
       prefix: ''
@@ -28,7 +27,7 @@ trainer:
       config_include_keys: null
       mode: null
       allow_val_change: null
-      resume: null
+      resume: must
       force: null
       tensorboard: null
       sync_tensorboard: null
@@ -37,18 +36,28 @@ trainer:
       settings: null
   enable_checkpointing: true
   callbacks:
-  - class_path: lightning.pytorch.callbacks.Timer
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
-      duration: 00:12:00:00
-      interval: step
+      dirpath: null
+      filename: null
+      monitor: val/f1_macro_epoch
       verbose: true
+      save_last: null
+      save_top_k: 3
+      save_weights_only: false
+      mode: max
+      auto_insert_metric_name: true
+      every_n_train_steps: null
+      train_time_interval: null
+      every_n_epochs: null
+      save_on_train_epoch_end: null
   - class_path: lightning.pytorch.callbacks.EarlyStopping
     init_args:
       monitor: val/f1_macro_epoch
       min_delta: 0.0
-      patience: 4
+      patience: 3
       verbose: true
-      mode: min
+      mode: max
       strict: true
       check_finite: true
       stopping_threshold: null
@@ -59,27 +68,17 @@ trainer:
     init_args:
       logging_interval: step
       log_momentum: false
-  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+  - class_path: lightning.pytorch.callbacks.Timer
     init_args:
-      dirpath: null
-      filename: null
-      monitor: val/f1_macro_epoch
+      duration: 00:14:00:00
+      interval: step
       verbose: true
-      save_last: null
-      save_top_k: 3
-      save_weights_only: false
-      mode: min
-      auto_insert_metric_name: true
-      every_n_train_steps: null
-      train_time_interval: null
-      every_n_epochs: null
-      save_on_train_epoch_end: null
   default_root_dir: null
   gradient_clip_val: null
   gradient_clip_algorithm: null
   num_nodes: 1
   num_processes: null
-  devices: 7
+  devices: null
   gpus: null
   auto_select_gpus: null
   tpu_cores: null
@@ -90,7 +89,7 @@ trainer:
   check_val_every_n_epoch: 1
   fast_dev_run: false
   accumulate_grad_batches: null
-  max_epochs: null
+  max_epochs: 3
   min_epochs: null
   max_steps: -1
   min_steps: null
@@ -100,9 +99,9 @@ trainer:
   limit_test_batches: null
   limit_predict_batches: null
   val_check_interval: 0.2
-  log_every_n_steps: 10
+  log_every_n_steps: 200
   accelerator: gpu
-  strategy: ddp
+  strategy: null
   sync_batchnorm: false
   precision: 32
   enable_model_summary: true
@@ -122,31 +121,30 @@ trainer:
   move_metrics_to_cpu: false
   multiple_trainloader_mode: max_size_cycle
   inference_mode: true
+data:
+  column: server
+  tokenizer: ufal/robeczech-base
+  cache_dir: /home/kydliceh/.cache/
+  max_length: 512
+  batch_size: 10
+  limit: null
+  pad_mode: false
+  num_proc: 16
+  trunc_type: start
 tune: false
 fit: true
-test: true
+test: false
 validate: false
+chcpt_path: Modelling/Transformers/projects/Server-Deep-Learning/soxen2v4/checkpoints/epoch=0-step=19760.ckpt
 model:
   class_path: models.FineTunedClassifier
   init_args:
     pretrained_model: ufal/robeczech-base
     class_num: 6
     lr: 2.0e-05
-    warmup_steps: 1000
+    warmup_steps: 0.1
     betas:
     - 0.9
-    - 0.98
+    - 0.999
     eps: 1.0e-08
     weight_decay: 0.0
-data:
-  class_path: datamodules.NewsDataModule
-  init_args:
-    column: server
-    tokenizer: ufal/robeczech-base
-    cache_dir: /home/kydliceh/.cache/
-    max_length: 512
-    batch_size: 11
-    limit: null
-    pad_mode: longest
-    num_proc: 4
-    trunc_type: start

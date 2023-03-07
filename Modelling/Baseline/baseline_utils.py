@@ -9,8 +9,8 @@ def preprocess_tokenized(lowercase, x):
         x = [w.lower() for w in x]
     return x
 
-def removeZero(X, y):
-    indices = np.where(y != 0)
+def removeMinus(X, y):
+    indices = np.where(y >= 0)
     x = X[indices]
     y = y[indices]
     print("After removing zeros: ", x.shape, y.shape)
@@ -25,3 +25,6 @@ pandas_reshaper = FunctionTransformer(reshape, validate=False)
 
 def to_pandas(x):
     return x.to_pandas()
+
+def to_nparray(x):
+    return np.array(x)

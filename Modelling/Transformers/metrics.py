@@ -35,32 +35,24 @@ class MetricWithMetadata(Metric):
 def create_train_metrics(num_classes: int):
     partial_create = partial(create_metric, num_classes=num_classes)
     train_metrics = [
-        partial_create("accuracy", epoch=True, step=False),
         partial_create("f1_macro", epoch=True, step=True),
         partial_create("f1_micro", epoch=True, step=False),
-        partial_create("precision_macro", epoch=True, step=False),
-        partial_create("precision_micro", epoch=True, step=False),
     ]
     return train_metrics
 
 def create_test_metrics(num_classes: int):
     partial_create = partial(create_metric, num_classes=num_classes)
     test_metrics = [
-        partial_create("accuracy", epoch=True, step=False),
         partial_create("f1_macro", epoch=True, step=False),
         partial_create("f1_micro", epoch=True, step=False),
-        partial_create("precision_macro", epoch=True, step=False),
     ]
     return test_metrics
 
 def create_val_metrics(num_classes: int):
     partial_create = partial(create_metric, num_classes=num_classes)
     val_metrics = [
-        partial_create("accuracy", epoch=True, step=False),
         partial_create("f1_macro", epoch=True, step=False),
         partial_create("f1_micro", epoch=True, step=False),
-        partial_create("precision_macro", epoch=True, step=False),
-        partial_create("precision_micro", epoch=True, step=False),
     ]
     return val_metrics
 
