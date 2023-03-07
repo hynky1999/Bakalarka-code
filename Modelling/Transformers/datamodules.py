@@ -136,7 +136,6 @@ class NewsDataModuleForLM(LightningDataModule):
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
         self.max_length = max_length
         self.column = column
-        self.trunc_type = truc_type
         self.data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer, padding=True
         )

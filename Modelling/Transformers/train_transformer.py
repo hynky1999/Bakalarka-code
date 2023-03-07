@@ -49,7 +49,7 @@ def main(cfg: DictConfig) -> None:
         LearningRateMonitor(logging_interval="step"),
         ModelCheckpoint(
             monitor="val/f1_macro_epoch",
-            save_top_k=3,
+            save_top_k=2,
             mode="max",
             verbose=True,
         ),
