@@ -1,0 +1,8 @@
+# @package _global_
+run:
+  train: True
+  test: True
+
+defaults:
+  - _self_
+  - override /data: debug

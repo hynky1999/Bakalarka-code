@@ -1,0 +1,11 @@
+model:
+  _target_: sklearn.linear_model.LogisticRegression
+  max_iter: 800
+  fit_intercept: True
+  tol: 0.0001
+  solver: saga
+  verbose: 2
+  C: 1.0
+  penalty: l2
+  warm_start: True
+  random_state: 42

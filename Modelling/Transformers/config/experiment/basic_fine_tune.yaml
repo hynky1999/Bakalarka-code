@@ -1,0 +1,13 @@
+# @package _global_
+
+trainer:
+  callbacks:
+    - _target_: callbacks.SimpleLayersFreezerCallback
+      last_unfreeze_layers: 2
+
+data:
+  batch_size: 64
+  num_proc: 2
+
+  
+
