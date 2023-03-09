@@ -10,5 +10,5 @@ search:
 
 defaults:
   - _self_
-  - override /data: small
+  - override /data: base
   - override /model: logistic_regression

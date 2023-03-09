@@ -60,6 +60,7 @@ class NewsDataModule(LightningDataModule):
         cols = {"labels", "attention_mask", "input_ids"}
         # Remove "Nones"
         dataset = dataset.filter(lambda batch: [x != 0 for x in batch["labels"]], batched=True, num_proc=self.num_proc, keep_in_memory=True)
+        # Map to 0-indexed labels
         dataset = dataset.map(
             lambda batch: {"labels": [x - 1 for x in batch["labels"]]},
             num_proc=self.num_proc,

@@ -1,6 +1,7 @@
-from typing import List
+from typing import List, Dict, Any
 from sklearn.model_selection import ParameterGrid
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import StandardScaler
 from functools import partial
 from pathlib import Path
 from datasets import load_dataset, Dataset
@@ -11,7 +12,9 @@ from baseline_utils import dummy, preprocess_tokenized
 import argparse
 import scipy
 import pickle
+from tqdm import tqdm
 import pandas as pd
+import numpy as np
 
 def get_tokenizer(tokenizer):
     print(f"Using tokenizer {tokenizer}")
@@ -53,7 +56,17 @@ def add_metadata(metadata, batch):
     
     return extract_metadata(*args)
 
-def add_tokenized(dataset: Dataset, tokenizer: str, metadata: List[str], num_proc: int, batch_size=1024):
+def normalize_metadata(metadatas, scaler):
+    metadatas = np.array(metadatas).reshape(-1, 1)
+    
+    if not hasattr(scaler, "n_features_in_"):
+        metadatas = scaler.fit_transform(metadatas)
+    else:
+        metadatas = scaler.transform(metadatas)
+    return metadatas.reshape(-1)
+    
+
+def add_tokenized(dataset: Dataset, tokenizer: str, metadata: List[str], num_proc: int, batch_size=1024, preprocessors: Dict[str, Any]={}):
     batch_tokenizer = partial(tokenize_batch, get_tokenizer(tokenizer))
     
     dataset = dataset.map(lambda batch: {
@@ -63,12 +76,17 @@ def add_tokenized(dataset: Dataset, tokenizer: str, metadata: List[str], num_pro
     dataset = dataset.map(lambda batch:
                            { k: add_metadata(k, batch) for k in metadata}
                            , batched=True, batch_size=batch_size, num_proc=num_proc)
+    if len(preprocessors) != 0:
+        dataset = dataset.map(lambda batch: {
+            k: normalize_metadata(batch[k], preprocessors[k]) for k in metadata
+        }, batched=True, batch_size=None, num_proc=num_proc)
+        
     return dataset
 
 
-def create_save_folder(args, path):
+def create_save_folder(args, path, override):
     folder = path / args.id
-    folder.mkdir(parents=True, exist_ok=False)
+    folder.mkdir(parents=True, exist_ok=override)
     with open(folder / "args.txt", "w") as f:
         f.write(str(args))
     return folder
@@ -84,6 +102,7 @@ def create_tfdif_vectorizer(args):
     tfidf = TfidfVectorizer(
         min_df=args.tfidf_min_df,
         max_df=args.tfidf_max_df,
+        max_features=args.tfidf_max_features,
         preprocessor=partial(preprocess_tokenized, args.tfidf_lower),
         lowercase=False,
         tokenizer=dummy,
@@ -94,13 +113,12 @@ def create_tfdif_vectorizer(args):
     return tfidf
     
 
-def get_tfidf(tfidf: TfidfVectorizer, df: pd.DataFrame):
-    content = df["tokenized"]
+def get_tfidf(tfidf: TfidfVectorizer, content: List[List[str]]):
     print(f"Converting {len(content)} documents to TF-IDF")
     if hasattr(tfidf, "vocabulary_"):
-        tf_features = tfidf.transform(content)
+        tf_features = tfidf.transform(tqdm(content))
     else:
-        tf_features = tfidf.fit_transform(content)
+        tf_features = tfidf.fit_transform(tqdm(content))
     return tf_features
 
 
@@ -108,20 +126,27 @@ def save_vectorizer(tfidf, save_folder):
     with open(save_folder / "vectorizer.pkl", "wb") as f:
         pickle.dump(tfidf, f)
 
+def create_scaler(metadata):
+    return {
+        met: StandardScaler() for met in metadata
+    }
+
 def run(args):
-    save_folder = create_save_folder(args, args.output_path)
+    save_folder = create_save_folder(args, args.output_path, args.override)
     tfidf = create_tfdif_vectorizer(args)
+    scalers = create_scaler(args.metadata)
 
     for split in args.splits:
         dataset = load_dataset(str(args.dataset_path), split=split)
         if args.limit is not None:
             dataset = dataset.select(range(args.limit))
-        dataset = add_tokenized(dataset, args.tokenizer, args.metadata, args.num_proc)
-        df = dataset.to_pandas()
-        tfidf_csr = get_tfidf(tfidf, df)
-        metadata = df[args.metadata]
-        scipy.sparse.save_npz(save_folder / f"{split}_tfidf.npz", tfidf_csr)
-        metadata.to_parquet(save_folder / f"{split}_metadata.parquet")
+        dataset = add_tokenized(dataset, args.tokenizer, args.metadata, args.num_proc, preprocessors=scalers)
+        tfidf_csr = get_tfidf(tfidf, dataset["tokenized"])
+        metadata_cols = [dataset[met] for met in args.metadata]
+        metadata_csr = scipy.sparse.csr_matrix(metadata_cols).T
+        tfidf_with_metadata = scipy.sparse.hstack([metadata_csr, tfidf_csr])
+        tfidf_with_metadata = tfidf_with_metadata.tocsr()
+        scipy.sparse.save_npz(save_folder / f"{split}_tfidf_with_metadata.npz", tfidf_with_metadata)
 
     save_vectorizer(tfidf, save_folder)
 
@@ -133,6 +158,7 @@ def tfidf_args(parser: argparse.ArgumentParser):
     group = parser.add_argument_group("TF-IDF")
     group.add_argument("--tfidf_min_df", type=int, default=1)
     group.add_argument("--tfidf_max_df", type=float, default=1.0)
+    group.add_argument("--tfidf_max_features", type=int, default=None)
     group.add_argument("--tfidf_ngram_range", type=parse_ngram_range, default=(1,2))
     group.add_argument("--tfidf_lower", type=bool, default=True)
     return parser
@@ -149,6 +175,7 @@ def run_args(parser: argparse.ArgumentParser):
     group.add_argument("--limit", type=int, default=None)
     group.add_argument("--id", type=str, default=datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     group.add_argument("--num_proc", type=int, default=None)
+    group.add_argument("--override", action="store_true")
     return parser
 
 # load arguments

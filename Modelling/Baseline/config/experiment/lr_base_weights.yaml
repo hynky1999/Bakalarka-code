@@ -7,8 +7,11 @@ search:
       - 100.0
       - 10.0
       - 1.0
+    class_weight:
+      - balanced
+    
 
 defaults:
   - _self_
-  - override /data: small
+  - override /data: base
   - override /model: logistic_regression

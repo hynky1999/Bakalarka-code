@@ -1,8 +1,8 @@
 #! /bin/sh
 #SBATCH -p gpu
 #SBATCH --gres=gpu:7
+#SBATCH -w gpu-node2
 #SBATCH --cpus-per-gpu=2
-#SBATCH --ntasks-per-node=7   # This needs to match Trainer(devices=...)
 #SBATCH --time=0-15:00:00
 #SBATCH --job-name="transformer"
 #SBATCH --err "run_scripts/logs/transformer.err"
