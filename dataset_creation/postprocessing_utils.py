@@ -10,23 +10,34 @@ from unicodedata import normalize
 import numpy as np
 import pandas as pd
 import re
+NONE_STR = "None"
 
 
+# None ensures compatibility with other classification tasks
 class Gender(IntEnum):
-    MAN = 0
-    WOMAN = 1
-    MIXED = 2
+    NONE = 0
+    MAN = 1
+    WOMAN = 2
+    MIXED = 3
+
+def create_none_to_x(x):
+    def none_to_x_inner(val):
+        if val is None:
+            return x
+        return val
+
+    return none_to_x_inner
 
 
-def filter_by_set(col, filter_set, lower=False):
+def create_filter_by_set(filter_set, lower=False):
     l = filter_set
     if lower:
         l = set(x.lower() for x in filter_set)
 
-    def filter_by_set_inner(js):
-        val = js[col]
+    def filter_by_set_inner(val):
         if val is None:
-            return js
+            return None
+
         is_list = isinstance(val, list)
         val = [val] if not is_list else val
 
@@ -36,26 +47,25 @@ def filter_by_set(col, filter_set, lower=False):
             if v_lower in l:
                 kept_vals.append(v)
 
+        if not is_list:
+            return kept_vals[0] if len(kept_vals) > 0 else None
+
         if len(kept_vals) == 0:
-            js[col] = None
-        elif not is_list:
-            js[col] = kept_vals[0]
-        else:
-            js[col] = kept_vals
-        return js
+            return []
+        return kept_vals
 
     return filter_by_set_inner
 
 
-def translate(col, translate_dict, lower=False):
-    def translate_inner(js):
-        if js[col] is None:
-            return js
-        val = js[col].lower() if lower else js[col]
+def create_translate(translate_dict, lower=False):
+    def translate_inner(item):
+        if item is None:
+            return item
+        val = item.lower() if lower else item
         if val in translate_dict:
-            js[col] = translate_dict[val]
+            return translate_dict[val]
 
-        return js
+        return item
 
     return translate_inner
 
@@ -147,31 +157,24 @@ def postprocess_author(author):
     return author
 
 
-def postprocess_authors(js):
-    js["author"] = (
-        [postprocess_author(author) for author in js["author"]]
-        if js["author"]
-        else None
-    )
-    return js
+def postprocess_authors(authors):
+    return [postprocess_author(author) for author in authors] if authors else None
 
 
 
-def add_gender(gender_mapping):
-    def _add_gender(js):
-        js["authors_gender"] = (
-            list(map(lambda auth: gender_mapping.get(auth, None), js["author"])) if js["author"] else None)
-        return js
+def create_add_gender(gender_mapping):
+    def _add_gender(row):
+        return list(map(lambda auth: gender_mapping.get(auth, Gender.NONE), row["authors"]))
 
     return _add_gender
 
 
 
 
-def filter_author(js):
-    authors = js["author"]
+def filter_author(rows):
+    authors = rows["authors"]
     if authors == None:
-        return js
+        return None
 
     new_authors = []
     for author in authors:
@@ -180,10 +183,9 @@ def filter_author(js):
             new_authors.append(author)
 
     if len(new_authors) == 0:
-        js["author"] = None
+        return None
 
-    js["author"] = new_authors
-    return js
+    return new_authors
 
 
 contains_number = re.compile("[0-9]")
@@ -257,15 +259,19 @@ def cap_with_dot(headline):
     return headline
 
 
-DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+DAYS = [NONE_STR ,"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
 # DATE
-def postprocess_date(js):
-    date = published_date_to_date(js["publication_date"])
-    day = DAYS[date.weekday()] if date else None
-    js["date"] = date
-    js["day"] = day
-    return js
+def postprocess_date(date):
+    date = published_date_to_date(date)
+    return date
 
+def add_day(item):
+    date = item["date"]
+    if date is None:
+        return 0
+
+    day = date.weekday() + 1
+    return day
 
 re_multispace = re.compile(r"\s+")
 
@@ -285,30 +291,31 @@ def normalize_text(text):
 
 
 # HEADLINE
-def postprocess_headline(js):
-    js["headline"] = normalize_text(cap_with_dot(js["headline"]))
-    return js
+def postprocess_headline(headline):
+    return normalize_text(cap_with_dot(headline))
 
 
 # BRIEF
-def postprocess_brief(js):
-    js["brief"] = normalize_text(cap_with_dot(js["brief"]))
-    return js
+def postprocess_brief(brief):
+    return normalize_text(cap_with_dot(brief))
 
 
-def postprocess_content(js):
-    js["content"] = normalize_text(js["content"])
-    return js
+def postprocess_content(content):
+    return normalize_text(content)
 
 
-def postprocess_category(js):
-    category = js["category"]
+def postprocess_keywords(keywords):
+    if keywords is None:
+        return None
+
+    return [cap_with_dot(normalize_text(keyword.lower())) for keyword in keywords]
+
+def postprocess_category(category):
     if category != None:
         category = category.lower()
 
     category = cap_with_dot(category)
-    js["category"] = category
-    return js
+    return category
 
 
 def add_server(server):
@@ -319,18 +326,17 @@ def add_server(server):
     return add_server_inner
 
 
-def add_cum_gender(js):
-    genders = js["authors_gender"]
-    g_type: Gender | None = None
-    if genders is not None:
-        for g in Gender:
-            if all(gender == g for gender in genders):
-                g_type = g
-                break
-        if g_type == None:
-            g_type = Gender.MIXED
-    js["cum_gender"] = g_type
-    return js
+def add_cum_gender(dst):
+    genders = dst["authors_gender"]
+    if len(genders) == 0:
+        return Gender.NONE
+
+    g_type = Gender.MIXED
+    for g in Gender:
+        if all(gender == g for gender in genders):
+            g_type = g
+            break
+    return g_type
 
 
 def as_Article(js):

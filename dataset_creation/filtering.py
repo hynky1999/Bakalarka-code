@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import cache
 from typing import Any, Callable, List
 from article_utils import get_statistics
 from nltk.tokenize.toktok import ToktokTokenizer
@@ -30,19 +31,17 @@ def create_config(config, default={}):
     return cfg
 
 
-def create_filter(col, filter, fc: Callable[[Any, Any], bool], lower=True):
+def create_filter(filter, fc: Callable[[Any, Any], bool], lower=True):
     if lower:
         filter = [f.lower() for f in filter]
 
-    def _filter(js):
-        head = js[col]
+    def _filter(head):
         if head is None:
             return True
         head = head.lower()
         return not any(fc(head, x) for x in filter)
 
     return _filter
-
 
 def create_filter_by_stats(config):
     def filter_js(df):

@@ -483,3 +483,6 @@ TMP.o
 
 # Arrows
 *.arrow
+
+# Sparse matrices
+*.npz

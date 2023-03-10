@@ -8,6 +8,11 @@ output_path: "Modelling/Baseline/models"
 
 logger:
   mode: online
+run:
+  load_model: null
+  search: False
+  test: False
+  train: False
 
 
 search:
@@ -15,6 +20,5 @@ search:
 
 
 defaults:
-  - data: base_tfidf
+  - data: base
   - model: logistic_regression
-  - tfidf: base

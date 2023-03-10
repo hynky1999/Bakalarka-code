@@ -7,7 +7,7 @@ from datasets import concatenate_datasets
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from sklearn.model_selection import PredefinedSplit
-from sklearn.metrics import confusion_matrix, get_scorer
+from sklearn.metrics import get_scorer
 from imblearn.pipeline import Pipeline, make_pipeline
 from imblearn import FunctionSampler
 from sklearn.model_selection import PredefinedSplit, GridSearchCV
@@ -20,7 +20,6 @@ from scipy.sparse import vstack, hstack
 from stop_words import get_stop_words
 from datetime import datetime
 from functools import partial
-from create_baseline_dataset import get_tokenizer, add_tokenized
 from datasets import load_dataset
 import argparse
 import scipy
@@ -29,30 +28,112 @@ import numpy as np
 import pandas as pd
 import wandb
 from dataclasses import dataclass
-from hydra.utils import to_absolute_path, instantiate
-from baseline_utils import dummy, preprocess_tokenized, removeMinus,  pandas_reshaper, to_pandas
-from omegaconf import OmegaConf
-import json
+from hydra.utils import to_absolute_path
+from omegaconf import DictConfig, OmegaConf
+
+
+@dataclass
+class ScoreResult:
+    name: str
+    score: Any
+
+
+def report_eval(results: Iterable[ScoreResult], set_name: str):
+    for result in results:
+        wandb.log({f"{set_name}/{result.name}": result.score})
+
+
+def train_partial(model: BaseEstimator, x, y, batch_size, epochs):
+    for _ in range(epochs):
 
 
 
-
-def count_non_zero(x):
-    return np.count_nonzero(x)
-
-def filter_zero(x: Dataset, col, n_proc):
-    n_proc = n_proc if n_proc > 0 else None
-    return x.filter(lambda batch: [x!= 0 for x in batch[col]], batched=True, num_proc=n_proc )
-    
-
-
-def train(x_train, y_train, x_eval, y_eval, model: Pipeline):
-    train_eval_x = concatenate_datasets([x_train, x_eval])
-    train_eval_y = np.concatenate([y_train, y_eval])
-
-    model = model.fit(train_eval_x, train_eval_y)
-    report_cv_results(model.named_steps["search"].cv_results_)
+def train(model: BaseEstimator, x, y):
+    # Measuring the time of training
+    print("Training")
+    start = datetime.now()
+    model = model.fit(x, y)
+    end = datetime.now()
+    wandb.log({"training_time": (end - start).total_seconds()})
     return model
+
+def evaluate(
+    model: Pipeline, x: scipy.sparse.csr_matrix, y: np.ndarray, score_fcs: dict, label_names: Iterable[Callable], conf_matrix
+):
+    prediction_labels = model.predict(x)
+    scores = [
+        ScoreResult(s, score_fc(DummyEstimator(), prediction_labels, y))
+        for s, score_fc in score_fcs.items()
+
+    ]
+    if conf_matrix:
+        wandb.sklearn.plot_confusion_matrix(
+            y, prediction_labels, labels=label_names
+        )
+    return scores
+
+class DummyEstimator(BaseEstimator):
+    def fit(self, X, y):
+        return self
+
+    def predict(self, X):
+        return X
+
+
+def create_model(model_cfg):
+    model = hydra.utils.instantiate(model_cfg)
+    return model
+
+
+def save_model(model, output_path):
+    output_path.mkdir(parents=True, exist_ok=True)
+    with open(output_path / "model.pkl", "wb") as f:
+        pickle.dump(model, f)
+
+    artifact = wandb.Artifact("tfidf", type="model")
+    artifact.add_dir(output_path)
+
+    wandb.log_artifact(artifact)
+
+
+def load_and_preprocess(
+    df_path: Path,
+    tfidf_path: Path,
+    col: str,
+    split: str,
+):
+    labels = load_dataset(df_path, split=split)[col]
+    # None to -1
+    labels = np.array(labels) - 1
+    sparse_input = scipy.sparse.load_npz(tfidf_path / f"{split}_tfidf_with_metadata.npz")
+    print(f"Loaded {split} with {len(labels)} samples and {sparse_input.shape[1]} features and {sparse_input.shape[0]} samples")
+    if sparse_input.shape[0] != len(labels):
+        limit = min(sparse_input.shape[0], len(labels))
+        sparse_input = sparse_input[:, :limit]
+        labels = labels[:limit]
+
+    # Remove samples with no label
+    keep_idxs = np.where(labels != -1)[0]
+
+    labels = labels[keep_idxs]
+    sparse_input = sparse_input[keep_idxs, :]
+
+
+    print(f"Loaded {split} with {len(labels)} samples")
+    print(f"Memory usage: {sparse_input.data.nbytes / 1024 / 1024} MB")
+    return sparse_input, labels
+
+def get_metdata_columns(metadata_path: Path):
+    metadata = pd.read_parquet(metadata_path / "test_metadata.parquet")
+    return list(metadata.columns)
+
+def get_tfidf_columns(vectorizer_path: Path):
+    with open(vectorizer_path / "vectorizer.pkl", "rb") as f:
+        vectorizer = pickle.load(f)
+    return vectorizer.get_feature_names_out()
+
+def create_score_fc(score_names):
+    return get_scorer(score_names)
 
 def report_cv_results(cv_results):
     df = pd.DataFrame(cv_results)
@@ -67,184 +148,82 @@ def report_cv_results(cv_results):
 
     wandb.log({"cv_results": df})
 
+def get_best_params(cv_results, metric):
+    best_idx = np.argmax(cv_results[f"mean_test_{metric}"])
+    return cv_results["params"][best_idx]
 
-class DummyEstimator(BaseEstimator):
-    def fit(self, x, y):
-        return self
-
-    def predict(self, x):
-        return x
-
-    def predict_proba(self, x):
-        return x
-
-def log_confusion_matrix(y_test, predictions_labels, labels, title):
-    cfs = confusion_matrix(y_test, predictions_labels, labels=range(len(labels)))
-    data = [[labels[i], labels[j] ,cfs[i, j]] for i,j in np.ndindex(cfs.shape)]
-    fields = [
-        "Actual",
-        "Predicted",
-        "nPredictions",
-    ]
-       
-    wandb.log({title: wandb.Table(data=data, columns=fields)})
-    
-
-
-
-def test(x_test: Dataset, y_test, model: Pipeline, labels, col, n_proc):
-    # Must be filtred as the minusDrop is not applied to predictions
-    # Still zero in dataset
-    x_test = filter_zero(x_test, col, n_proc)
-    # Already -1 in y
-    y_test = y_test[y_test >= 0]
-
-
-
-    predictions_prob = model.predict_proba(x_test)
-    predictions_labels = np.argmax(predictions_prob, axis=1)
-    log_confusion_matrix(y_test, predictions_labels, labels, f"{x_test.split}/confusion matrix")
-    wandb.log({f"{x_test.split}/{s}": score_fc(DummyEstimator(), y_test, predictions_labels) for s, score_fc in model.named_steps["search"].scorer_.items()})
-
-def create_columns(used_features, lowercase, max_features, ngram_range, min_df, max_df):
-    tfidf = TfidfVectorizer(
-        max_features=max_features,
-        ngram_range=ngram_range,
-        min_df=min_df,
-        max_df=max_df,
-        stop_words=get_stop_words("czech"),
-        tokenizer=dummy,
-        preprocessor=partial(preprocess_tokenized, lowercase),
-    )
-    possible_features = [
-        ("words", make_pipeline(pandas_reshaper, StandardScaler()), "words"),
-        ("digits", make_pipeline(pandas_reshaper, StandardScaler()), "digits"),
-        ("capitalized", make_pipeline(pandas_reshaper, StandardScaler()), "capitalized"),
-        ("non_alpha", make_pipeline(pandas_reshaper, StandardScaler()), "non_alpha"),
-        (
-            "upercase",
-            make_pipeline(pandas_reshaper, StandardScaler()),
-            "upercase",
-        ),
-    ]
-
-    chosen_features = [col for col in possible_features if col[0] in used_features]
-    if len(used_features) != len(chosen_features):
-        raise ValueError(
-            f"Used features {used_features} do not match {chosen_features}"
-        )
-
-    if len(chosen_features) == 0:
-        raise ValueError(f"No features were chosen")
-
-        
-    columns = ColumnTransformer(
-        chosen_features + [("tfidf", tfidf, "tokenized")], remainder="drop", n_jobs=-1, verbose=True
-    )
-    return columns
-
-
-def create_model(model_args, columns, cv, params, tokenizer, metadata, scores: List[str], n_proc=-1):
-    model = instantiate(model_args)
-    cv_search = GridSearchCV(
+def find_best_model(
+        model: BaseEstimator,
+        x: scipy.sparse.csr_matrix,
+        y: np.ndarray,
+        score_fcs: dict,
+        split: PredefinedSplit,
+        cv_params: dict,
+):
+    grid_search = GridSearchCV(
         model,
-        cv=cv,
-        param_grid=params,
+        param_grid=cv_params,
+        scoring=score_fcs,
         return_train_score=True,
-        n_jobs=n_proc,
+        cv=split,
+        refit=False,
+        n_jobs=-1,
         verbose=1,
-        scoring=tuple(scores),
-        refit=scores[0],
     )
-    tok_n_proc = n_proc if n_proc > 0 else None
-
-    model = Pipeline([
-                      ("tokenize", FunctionTransformer(partial(add_tokenized, tokenizer=tokenizer, metadata=metadata, num_proc=tok_n_proc), validate=False)),
-                      ("to_pandas", FunctionTransformer(to_pandas, validate=False)),
-                      ("columns", columns),
-                      ("drop_None", FunctionSampler(func=removeMinus)),
-                       ("search", cv_search)], verbose=True)
+    grid_search.fit(x, y)
+    report_cv_results(grid_search.cv_results_)
+    best_params = get_best_params(grid_search.cv_results_, metric=list(score_fcs.keys())[0])
+    model.set_params(**best_params)
     return model
 
 
-def save_model(model, output_path):
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    with open(output_path / "model.pkl", "wb") as f:
-        pickle.dump(model, f)
-
-    artifact = wandb.Artifact("tfidf", type="model")
-    artifact.add_dir(output_path)
-
-    wandb.log_artifact(artifact)
 
 
-def prepare_y(dataset, col):
-    return np.array(dataset[col]) - 1
 
 
-@hydra.main(version_base="1.1", config_path="./config", config_name="config")
+@hydra.main(version_base="1.3", config_path="./config", config_name="config")
 def main(cfg: DictConfig):
-
-    wandb.init(project=f"Baseline-{cfg.task.column.capitalize()}", config=vars(cfg), mode=cfg.logger.mode)
+    cfg_as_dict = OmegaConf.to_container(cfg)
+    wandb.init(project=f"{cfg.task.column.capitalize()}-ML", config=cfg_as_dict, mode=cfg.logger.mode, settings=wandb.Settings(start_method="thread"))
+    partial_load = partial(
+        load_and_preprocess,
+        cfg.data.dataset_path,
+        Path(to_absolute_path(cfg.data.tfidf_path)),
+        cfg.task.column,
+    )
     print("Loading data...")
-    train_dataset = load_dataset(str(cfg.data.dataset_path), split="train")
-    eval_dataset = load_dataset(str(cfg.data.dataset_path), split="validation")
-    test_dataset = load_dataset(str(cfg.data.dataset_path), split="test")
+    train_x, train_y = partial_load(split="train")
+    eval_x, eval_y = partial_load(split="validation")
+    test_x, test_y = partial_load(split="test")
+
+    print("Creating model...")
+    model = create_model(cfg.model.model)
 
 
-    if cfg.data.limit is not None:
-        train_dataset = train_dataset.select(range(cfg.data.limit))
-        eval_dataset = eval_dataset.select(range(cfg.data.limit))
-        test_dataset = test_dataset.select(range(cfg.data.limit))
-
-
-    train_eval_filtered = filter_zero(train_dataset, cfg.task.column, n_proc=cfg.n_proc)
-    test_filtered = filter_zero(test_dataset, cfg.task.column, n_proc=cfg.n_proc)
-    wandb.sklearn.plot_class_proportions(train_eval_filtered[cfg.task.column], test_filtered[cfg.task.column], train_dataset.features[cfg.task.column].names)
-
-
-    y_train = prepare_y(train_dataset, cfg.task.column)
-    y_eval = prepare_y(eval_dataset, cfg.task.column)
-
-    columns = create_columns(cfg.tfidf.features, lowercase=cfg.tfidf.lowercase, max_features=cfg.tfidf.max_features, ngram_range=tuple(cfg.tfidf.ngram_range), min_df=cfg.tfidf.min_df, max_df=cfg.tfidf.max_df)
-    train_split_size, eval_split_size = np.sum(y_train != -1), np.sum(y_eval != -1)
-    train_eval_split = PredefinedSplit(
-        test_fold=[-1] * train_split_size + [1] * eval_split_size
-    )
-    wandb.log({"Real size": train_split_size + eval_split_size})
-
-    model = create_model(
-        cfg.model.model,
-        columns,
-        train_eval_split,
-        OmegaConf.to_container(cfg.search.cv_params),
-        cfg.tfidf.tokenizer,
-        cfg.tfidf.features,
-        cfg.score_types,
-        cfg.n_proc,
-    )
-
+    score_fcs = {score: create_score_fc(score) for score in cfg.score_types}
+    label_names = load_dataset(cfg.data.dataset_path, split="test").features[cfg.task.column].names[1:]
     # We use pretokenized data
-    labels = train_dataset.features[cfg.task.column].names[1:]
-    if cfg.run.train:
-        trained_model = train(train_dataset, y_train, eval_dataset, y_eval, model)
-        save_model(trained_model, Path(to_absolute_path(cfg.output_path)) / cfg.task.column / wandb.run.id)
-        test(train_dataset, y_train, trained_model, labels, cfg.task.column, cfg.n_proc)
-        test(eval_dataset, y_eval, trained_model, labels, cfg.task.column, cfg.n_proc)
+    if cfg.run.load_model is not None:
+        model = pickle.load(open(cfg.run.load_model, "rb"))
 
-    else:
-        trained_model = load_model(Path(to_absolute_path(cfg.model_checkpoint)))
+
+    cv_params = OmegaConf.to_container(cfg.search.cv_params)
+    if cfg.run.search and len(cv_params) > 0:
+        train_eval_x = scipy.sparse.vstack([train_x, eval_x])
+        train_eval_y = np.concatenate([train_y, eval_y])
+        cv_split = PredefinedSplit([-1] * len(train_y) + [1] * len(eval_y))
+        model = find_best_model(model, train_eval_x, train_eval_y, score_fcs, cv_split, cv_params)
+
+    if cfg.run.train:
+        model = train(model, train_x, train_y)
+
+        report_eval(evaluate(model, train_x, train_y, score_fcs, label_names, conf_matrix=False), "train")
+        report_eval(evaluate(model, eval_x, eval_y, score_fcs, label_names, conf_matrix=False), "eval")
+        save_model(model, Path(to_absolute_path(cfg.output_path)) / cfg.task.column / wandb.run.id)
 
     if cfg.run.test:
-        test(test_dataset, prepare_y(test_filtered, cfg.task.column), trained_model, labels, cfg.task.column, cfg.n_proc)
+        report_eval(evaluate(model, test_x, test_y, score_fcs, label_names, conf_matrix=True), "test")
 
-
-
-def load_model(model_path):
-    with open(model_path, "rb") as f:
-        model = pickle.load(f)
-    return model
 
 if __name__ == "__main__":
     main()
