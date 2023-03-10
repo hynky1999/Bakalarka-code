@@ -1,14 +1,11 @@
 # @package _global_
-n_proc: 4
-search:
-  cv_params:
-    C:
-      - 1000.0
-      - 100.0
-      - 10.0
-      - 1.0
 
+hydra:
+  sweeper:
+    params:
+      model.model.C: 1.0, 10.0, 100.0, 1000.0
+      model.model.max_iter: 1000
 defaults:
-  - _self_
   - override /data: base
   - override /model: logistic_regression
+  - override /hydra/launcher: joblib

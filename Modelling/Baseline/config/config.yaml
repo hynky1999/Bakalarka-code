@@ -10,11 +10,15 @@ logger:
   mode: online
 run:
   load_model: null
+  search: False
+  test: False
+  train: False
+
 
 search:
   cv_params: {}
 
 
 defaults:
-  - data: base_tfidf
+  - data: base
   - model: logistic_regression

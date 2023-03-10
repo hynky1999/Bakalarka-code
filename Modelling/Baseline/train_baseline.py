@@ -43,6 +43,10 @@ def report_eval(results: Iterable[ScoreResult], set_name: str):
         wandb.log({f"{set_name}/{result.name}": result.score})
 
 
+def train_partial(model: BaseEstimator, x, y, batch_size, epochs):
+    model.set_params(**{"max_iter": 1})
+
+
 def train(model: BaseEstimator, x, y):
     # Measuring the time of training
     print("Training")
@@ -53,7 +57,7 @@ def train(model: BaseEstimator, x, y):
     return model
 
 def evaluate(
-    model: Pipeline, x: scipy.sparse.csr_matrix, y: np.ndarray, score_fcs: dict, label_names: Iterable[Callable]
+    model: Pipeline, x: scipy.sparse.csr_matrix, y: np.ndarray, score_fcs: dict, label_names: Iterable[Callable], conf_matrix
 ):
     prediction_labels = model.predict(x)
     scores = [
@@ -61,9 +65,10 @@ def evaluate(
         for s, score_fc in score_fcs.items()
 
     ]
-    wandb.sklearn.plot_confusion_matrix(
-        y, prediction_labels, labels=label_names
-    )
+    if conf_matrix:
+        wandb.sklearn.plot_confusion_matrix(
+            y, prediction_labels, labels=label_names
+        )
     return scores
 
 class DummyEstimator(BaseEstimator):
@@ -175,16 +180,16 @@ def find_best_model(
 
 
 
-@hydra.main(version_base="1.1", config_path="./config", config_name="config")
+@hydra.main(version_base="1.3", config_path="./config", config_name="config")
 def main(cfg: DictConfig):
+    cfg_as_dict = OmegaConf.to_container(cfg)
+    wandb.init(project=f"{cfg.task.column.capitalize()}-ML", config=cfg_as_dict, mode=cfg.logger.mode, settings=wandb.Settings(start_method="thread"))
     partial_load = partial(
         load_and_preprocess,
         cfg.data.dataset_path,
         Path(to_absolute_path(cfg.data.tfidf_path)),
         cfg.task.column,
     )
-
-    wandb.init(project=f"{cfg.task.column.capitalize()}-ML", config=vars(cfg), mode=cfg.logger.mode)
     print("Loading data...")
     train_x, train_y = partial_load(split="train")
     eval_x, eval_y = partial_load(split="validation")
@@ -193,26 +198,30 @@ def main(cfg: DictConfig):
     print("Creating model...")
     model = create_model(cfg.model.model)
 
+
     score_fcs = {score: create_score_fc(score) for score in cfg.score_types}
     label_names = load_dataset(cfg.data.dataset_path, split="test").features[cfg.task.column].names[1:]
     # We use pretokenized data
     if cfg.run.load_model is not None:
         model = pickle.load(open(cfg.run.load_model, "rb"))
-    if cfg.run.train is not None:
-        # Measure time of training
 
+
+    cv_params = OmegaConf.to_container(cfg.search.cv_params)
+    if cfg.run.search and len(cv_params) > 0:
         train_eval_x = scipy.sparse.vstack([train_x, eval_x])
         train_eval_y = np.concatenate([train_y, eval_y])
         cv_split = PredefinedSplit([-1] * len(train_y) + [1] * len(eval_y))
-        model = find_best_model(model, train_eval_x, train_eval_y, score_fcs, cv_split, OmegaConf.to_container(cfg.search.cv_params))
+        model = find_best_model(model, train_eval_x, train_eval_y, score_fcs, cv_split, cv_params)
+
+    if cfg.run.train:
         model = train(model, train_x, train_y)
 
-        report_eval(evaluate(model, train_x, train_y, score_fcs, label_names), "train")
-        report_eval(evaluate(model, eval_x, eval_y, score_fcs, label_names), "eval")
+        report_eval(evaluate(model, train_x, train_y, score_fcs, label_names, conf_matrix=False), "train")
+        report_eval(evaluate(model, eval_x, eval_y, score_fcs, label_names, conf_matrix=False), "eval")
         save_model(model, Path(to_absolute_path(cfg.output_path)) / cfg.task.column / wandb.run.id)
 
     if cfg.run.test:
-        report_eval(evaluate(model, test_x, test_y, score_fcs, label_names), "test")
+        report_eval(evaluate(model, test_x, test_y, score_fcs, label_names, conf_matrix=True), "test")
 
 
 if __name__ == "__main__":
