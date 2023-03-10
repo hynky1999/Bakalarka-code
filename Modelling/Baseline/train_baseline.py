@@ -44,7 +44,8 @@ def report_eval(results: Iterable[ScoreResult], set_name: str):
 
 
 def train_partial(model: BaseEstimator, x, y, batch_size, epochs):
-    model.set_params(**{"max_iter": 1})
+    for _ in range(epochs):
+
 
 
 def train(model: BaseEstimator, x, y):
