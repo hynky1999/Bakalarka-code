@@ -1,0 +1,3 @@
+_target_: "datamodules.NewsTfidfDataModule"
+data_path: "Modelling/Transformers/data/tfidf/debug"
+num_features: 50005

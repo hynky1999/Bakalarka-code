@@ -1,0 +1,21 @@
+# @package _global_
+data:
+  batch_size: 64
+  num_proc: 0
+
+optimizer:
+  lr: 0.01
+  weight_decay: 0
+
+
+defaults:
+  - override /data: news_tfidf_debug
+  - override /scheduler: exponential
+  - override /optimizer: adamW
+  - override /model: lr
+
+  
+
+
+max_epochs: 12
+log_every_n_steps: 1000

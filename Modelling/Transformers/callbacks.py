@@ -13,14 +13,14 @@ class SimpleLayersFreezerCallback(BaseFinetuning):
     def freeze_before_training(self, model):
         self.freeze(model)
         # Classifier unfreeze
-        if hasattr(model.pretrained_model, "classifier"):
-            self.make_trainable(model.pretrained_model.classifier)
+        if hasattr(model.model, "classifier"):
+            self.make_trainable(model.model.classifier)
         # Last freeze_layers layers unfreeze
-        if hasattr(model.pretrained_model, "roberta") and hasattr(
-            model.pretrained_model.roberta, "encoder"
+        if hasattr(model.model, "roberta") and hasattr(
+            model.model.roberta, "encoder"
         ):
             self.make_trainable(
-                model.pretrained_model.roberta.encoder.layer[
+                model.model.roberta.encoder.layer[
                     -self.last_unfreeze_layers :
                 ]
             )

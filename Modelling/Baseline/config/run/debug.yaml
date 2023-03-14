@@ -1,7 +1,12 @@
 # @package _global_
 run:
-  train: True
+  train:
+    epoch: 1000
+    batch_size: 1000
+    log_steps: null
+
   test: True
+  eval: True
 
 defaults:
   - _self_

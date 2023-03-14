@@ -9,7 +9,7 @@ from callbacks import SimpleLayersFreezerCallback
 from datamodules import NewsDataModule
 from hydra.utils import instantiate
 from lightning.pytorch.callbacks import ModelCheckpoint,EarlyStopping, Timer, LearningRateMonitor
-from lightning.pytorch.loggers import WandbLogger 
+from lightning.pytorch.loggers.wandb import WandbLogger 
 
 
 def fit(trainer: Trainer, model, datamodule, ckpt_path=None):
@@ -37,50 +37,63 @@ def tune(trainer: Trainer, model, datamodule):
 
 
     
-@hydra.main(config_path="config", config_name="config", version_base="1.1")
+@hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
-    logger = WandbLogger(project=f"{cfg.task.column.capitalize()}-Deep-Learning", log_model=True, save_dir= cfg.logger.save_dir, config=vars(cfg))
+    logger = None
+    if "logger" in cfg:
+        logger = instantiate(cfg.logger, project=f"{cfg.task.column.capitalize()}-Deep-Learning")(config=vars(cfg)) if cfg.logger else None
 
     datamodule = instantiate(cfg.data, column=cfg.task.column, num_classes=cfg.task.num_classes)
-    model = instantiate(cfg.model, num_classes=cfg.task.num_classes)
+    optimizer = instantiate(cfg.optimizer, _partial_=True) if "optimizer" in cfg else None
+    scheduler = instantiate(cfg.scheduler, _partial_=True) if "scheduler" in cfg else None
+    
+    model_kwargs = {
+        "num_classes": datamodule.num_classes,
+        "optimizer": optimizer,
+        "scheduler": scheduler,
+    }
+    if hasattr(datamodule, "num_features"):
+        model_kwargs["num_features"] = datamodule.num_features
+    model = instantiate(cfg.model, **model_kwargs)
 
     callbacks = [
-        LearningRateMonitor(logging_interval="step"),
         ModelCheckpoint(
             monitor="val/f1_macro_epoch",
             save_top_k=2,
             mode="max",
             verbose=True,
         ),
-        EarlyStopping(
-            monitor="val/f1_macro_epoch",
-            patience=3,
-            mode="max",
-            verbose=True,
-        ),
+        # EarlyStopping(
+        #     monitor="val/f1_macro_epoch",
+        #     patience=3,
+        #     mode="max",
+        #     verbose=True,
+        # ),
         Timer(interval="step",
             duration="00:14:00:00"
         )
     ]
-    additional_callbacks = instantiate(cfg.trainer.callbacks)
-    print(datamodule)
+    if logger is not None:
+        callbacks.append(LearningRateMonitor(logging_interval="step"))
+
+
+    additional_callbacks = instantiate(cfg.callbacks)
 
 
     trainer: Trainer = Trainer(
         callbacks=callbacks + additional_callbacks,
         logger=logger,
         enable_model_summary=True,
-        strategy=cfg.trainer.strategy,
-        max_epochs=cfg.trainer.max_epochs,
+        strategy=cfg.accelerator.strategy,
+        devices=cfg.accelerator.devices,
+        max_epochs=cfg.max_epochs,
         enable_progress_bar=True,
-        log_every_n_steps=cfg.trainer.log_every_n_steps,
-        val_check_interval=cfg.trainer.val_check_interval,
-        accelerator=cfg.trainer.accelerator,
+        log_every_n_steps=cfg.log_every_n_steps,
+        val_check_interval=cfg.val_check_interval,
+        accelerator=cfg.accelerator.accelerator,
     )
 
-
-    print(trainer.strategy)
 
     if cfg.run.tune == True:
         tune(trainer, model, datamodule)

@@ -1,0 +1,2 @@
+_target_: "schedulers.get_exponential_lr"
+gamma: 0.95

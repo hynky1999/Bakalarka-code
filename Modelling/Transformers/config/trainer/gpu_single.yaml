@@ -1,7 +1,0 @@
-max_epochs: 1
-log_every_n_steps: 1000
-val_check_interval: 0.2
-callbacks: []
-strategy: dp
-accelerator: gpu
-devices: 1

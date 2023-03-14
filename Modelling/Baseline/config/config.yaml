@@ -10,9 +10,9 @@ logger:
   mode: online
 run:
   load_model: null
-  search: False
   test: False
-  train: False
+  train: null
+  eval: False
 
 
 search:
@@ -22,3 +22,4 @@ search:
 defaults:
   - data: base
   - model: logistic_regression
+  - callbacks: basics
