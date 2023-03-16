@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import hydra
 from lightning import Trainer, seed_everything
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import wandb
 from lightning.pytorch.cli import LightningCLI, LightningArgumentParser
 from lightning.pytorch.tuner.tuning import Tuner
@@ -42,19 +42,20 @@ def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
     logger = None
     if "logger" in cfg:
-        logger = instantiate(cfg.logger, project=f"{cfg.task.column.capitalize()}-Deep-Learning")(config=vars(cfg)) if cfg.logger else None
+        logger = instantiate(cfg.logger, project=f"{cfg.task.name.capitalize()}-Deep-Learning")(config=vars(cfg)) if cfg.logger else None
 
-    datamodule = instantiate(cfg.data, column=cfg.task.column, num_classes=cfg.task.num_classes)
+    datamodule_kwargs = OmegaConf.to_container(cfg.task.setting) if "setting" in cfg.task else {}
+    datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, **datamodule_kwargs)
     optimizer = instantiate(cfg.optimizer, _partial_=True) if "optimizer" in cfg else None
     scheduler = instantiate(cfg.scheduler, _partial_=True) if "scheduler" in cfg else None
     
     model_kwargs = {
-        "num_classes": datamodule.num_classes,
         "optimizer": optimizer,
         "scheduler": scheduler,
     }
     if hasattr(datamodule, "num_features"):
         model_kwargs["num_features"] = datamodule.num_features
+
     model = instantiate(cfg.model, **model_kwargs)
 
     callbacks = [

@@ -1,4 +1,5 @@
 from functools import partial
+import torch
 from torchmetrics import Metric
 from dataclasses import dataclass
 from torchmetrics import Accuracy, ConfusionMatrix, F1Score, Precision
@@ -35,7 +36,7 @@ class MetricWithMetadata(Metric):
 def create_train_metrics(num_classes: int):
     partial_create = partial(create_metric, num_classes=num_classes)
     train_metrics = [
-        partial_create("f1_macro", epoch=True, step=True),
+        partial_create("f1_macro", epoch=True, step=False),
         partial_create("f1_micro", epoch=True, step=False),
     ]
     return train_metrics
@@ -121,3 +122,18 @@ def reset_and_log_metrics(model, split):
                     logger=True,
                 )
         metric.reset()
+
+
+class PerplexityFromLossMetric(Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state("crossentropy", default=torch.tensor(0, dtype=torch.float), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, loss):
+        self.crossentropy += loss
+        self.total += loss.numel()
+
+    def compute(self):
+        return torch.exp(self.crossentropy/self.total)
+    
