@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 import torch
 import torch.sparse
-from transformers import AutoTokenizer, DataCollatorWithPadding
+from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForLanguageModeling
 from datasets import load_dataset, load_from_disk
 from torch.utils.data import DataLoader
 from scipy.sparse import csr_matrix, coo_matrix
@@ -243,3 +243,103 @@ class NewsTfidfDataModule(LightningDataModule):
 
 
 
+
+
+
+
+class NewsDataModuleForLM(LightningDataModule):
+    def __init__(
+        self,
+        tokenizer,
+        cache_dir,
+        max_length=512,
+        mlm=0.15,
+        batch_size=12,
+        limit=None,
+        num_proc: int=4,
+    ):
+        super().__init__()
+        self.batch_size = batch_size
+        self.num_proc = num_proc
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
+        self.max_length = max_length
+        self.cache_dir = Path(cache_dir)
+        self.mlm  = mlm
+        self.limit = limit
+
+
+    def tokenize_function(self, examples):
+        result = self.tokenizer(examples["content"])
+        if self.tokenizer.is_fast:
+            result["word_ids"] = [result.word_ids(i) for i in range(len(result["input_ids"]))]
+        return result
+
+    def chunkify(self, examples):
+        concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+        total_length = len(concatenated_examples[list(examples.keys())[0]])
+        total_length = (total_length // self.max_length) * self.max_length
+        result = {
+            k: [t[i : i + self.max_length] for i in range(0, total_length, self.max_length)]
+            for k, t in concatenated_examples.items()
+        }
+        result["labels"] = result["input_ids"].copy()
+        return result
+
+
+    def prepare_split(self, split):
+        split_cache_dir = self.cache_dir / "LM" / str(self.max_length) / split
+        if split_cache_dir.exists():
+            # No cache invalidation but don't wanna bother
+            return
+
+        dataset = load_dataset(str("hynky/czech_news_dataset"), split=split)
+        if self.limit:
+            dataset = dataset.select(range(self.limit))
+        dataset = dataset.remove_columns(set(dataset.column_names) - {"content"})
+
+        dataset = dataset.map(
+            self.tokenize_function,
+            batched=True, keep_in_memory=True, remove_columns=["content"]
+        ) 
+        dataset = dataset.map(
+            self.chunkify,
+            batched=True, keep_in_memory=True
+        )
+        dataset.set_format("pt", columns=["input_ids", "attention_mask", "labels"])
+        dataset.save_to_disk(str(split_cache_dir), num_proc=self.num_proc)
+
+    def load_split(self, split):
+        dataset = load_from_disk(
+            self.cache_dir / "LM" / str(self.max_length) / split
+        )
+        return dataset
+
+    def prepare_data(self):
+        self.prepare_split("train")
+        self.prepare_split("validation")
+        self.prepare_split("test")
+
+    def setup(self, stage=None):
+        if stage == "fit" or stage is None:
+            self.train_dataset = self.load_split("train")
+            self.val_dataset = self.load_split("validation")
+        if stage == "test" or stage is None:
+            self.test_dataset = self.load_split("test")
+
+    def create_dataloader(self, dataset):
+        collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=self.mlm)
+        return DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_proc,
+            collate_fn=collator,
+        )
+
+    def train_dataloader(self):
+        return self.create_dataloader(self.train_dataset)
+
+    def val_dataloader(self):
+        return self.create_dataloader(self.val_dataset)
+
+    def test_dataloader(self):
+        return self.create_dataloader(self.test_dataset)

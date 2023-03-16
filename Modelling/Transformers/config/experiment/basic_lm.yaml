@@ -1,6 +1,6 @@
 # @package _global_
 data:
-  batch_size: 64
+  batch_size: 2
   num_proc: 0
 
 optimizer:
@@ -9,12 +9,9 @@ optimizer:
 
 
 defaults:
-  - override /data: news_tfidf_debug
+  - override /data: news_lm
   - override /scheduler: exponential
   - override /optimizer: adamW
-  - override /model: lr
-
-  
-
+  - override /model: lm_model
 
 max_epochs: 12
