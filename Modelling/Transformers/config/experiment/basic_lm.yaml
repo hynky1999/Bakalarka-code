@@ -1,17 +1,30 @@
 # @package _global_
 data:
-  batch_size: 2
-  num_proc: 0
+  batch_size: 11
 
 optimizer:
-  lr: 0.01
+  lr: 1e-4
+  betas: [0.9, 0.98]
   weight_decay: 0
 
 
+callbacks:
+  - _target_: lightning.pytorch.callbacks.EarlyStopping
+    monitor: val/perplexity
+    patience: 5
+    verbose: true
+    mode: min
+
+  - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    monitor: val/perplexity
+    save_top_k: 1
+    verbose: true
+    mode: min
+
 defaults:
   - override /data: news_lm
-  - override /scheduler: exponential
+  - override /scheduler: linear_warmup
   - override /optimizer: adamW
-  - override /model: lm_model
+  - override /model: robeczech_lm
 
-max_epochs: 12
+max_epochs: 4
