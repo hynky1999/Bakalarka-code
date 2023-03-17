@@ -1,0 +1,2 @@
+_target_: models.LMModel
+pretrained_model: "ufal/robeczech-base"

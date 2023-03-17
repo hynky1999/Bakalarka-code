@@ -1,0 +1,24 @@
+# @package _global_
+
+data:
+  batch_size: 11
+  num_proc: 0
+
+optimizer:
+  lr: 5e-5
+  weight_decay: 0
+
+trainer:
+  callbacks:
+    - _target_: callbacks.GradualUnfreezingCallback
+      unfreeze_per_epoch: 2
+      div_lr: 1/0.9
+
+
+defaults:
+  - override /data: news_tokenized
+  - override /scheduler: linear_warmup
+  - override /optimizer: adamW
+  - override /model: robeczech_class
+
+max_epochs: 4

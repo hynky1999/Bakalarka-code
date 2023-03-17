@@ -1,0 +1,2 @@
+_target_: models.FineTunedClassifier
+pretrained_model: "hynky/hyneczech-base"
