@@ -3,25 +3,22 @@ import hydra
 from lightning import Trainer, seed_everything
 from omegaconf import DictConfig, OmegaConf
 import wandb
-from lightning.pytorch.cli import LightningCLI, LightningArgumentParser
 from lightning.pytorch.tuner.tuning import Tuner
-from callbacks import SimpleLayersFreezerCallback
-from datamodules import NewsDataModule
 from hydra.utils import instantiate
 from lightning.pytorch.callbacks import ModelCheckpoint,EarlyStopping, Timer, LearningRateMonitor
-from lightning.pytorch.loggers.wandb import WandbLogger 
+from lightning.pytorch.loggers import TensorBoardLogger
 
 
 def fit(trainer: Trainer, model, datamodule, ckpt_path=None):
     trainer.fit(model, datamodule, ckpt_path=ckpt_path)
 
 
-def validate(trainer: Trainer, model, datamodule):
-    trainer.validate(model, datamodule)
+def validate(trainer: Trainer, model, datamodule, ckpt_path=None):
+    trainer.validate(model, datamodule, ckpt_path=ckpt_path)
 
 
-def test(trainer, model, datamodule):
-    trainer.test(model, datamodule)
+def test(trainer, model, datamodule, ckpt_path=None):
+    trainer.test(model, datamodule, ckpt_path=ckpt_path)
 
 
 def tune(trainer: Trainer, model, datamodule):
@@ -40,9 +37,12 @@ def tune(trainer: Trainer, model, datamodule):
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
-    logger = None
     if "logger" in cfg:
-        logger = instantiate(cfg.logger, project=f"{cfg.task.name.capitalize()}-Deep-Learning")(config=vars(cfg)) if cfg.logger else None
+        logger = instantiate(cfg.logger, project=f"{cfg.task.name.capitalize()}-Deep-Learning")(config=vars(cfg))
+    else:
+        logger = TensorBoardLogger("tb_logs", name=cfg.task.name)
+
+    
 
     datamodule_kwargs = OmegaConf.to_container(cfg.task.setting) if "setting" in cfg.task else {}
     datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, **datamodule_kwargs)
@@ -59,26 +59,11 @@ def main(cfg: DictConfig) -> None:
     model = instantiate(cfg.model, **model_kwargs)
 
     callbacks = [
-        ModelCheckpoint(
-            monitor="val/f1_macro_epoch",
-            save_top_k=2,
-            mode="max",
-            verbose=True,
-        ),
-        # EarlyStopping(
-        #     monitor="val/f1_macro_epoch",
-        #     patience=3,
-        #     mode="max",
-        #     verbose=True,
-        # ),
         Timer(interval="step",
-            duration="00:14:00:00"
-        )
+            duration="02:00:00:00"
+        ),
+        LearningRateMonitor(logging_interval="step")
     ]
-    if logger is not None:
-        callbacks.append(LearningRateMonitor(logging_interval="step"))
-
-
     additional_callbacks = instantiate(cfg.callbacks)
 
 
@@ -92,22 +77,26 @@ def main(cfg: DictConfig) -> None:
         enable_progress_bar=True,
         log_every_n_steps=cfg.log_every_n_steps,
         val_check_interval=cfg.val_check_interval,
+        limit_train_batches=cfg.limit_train_batches,
+        limit_val_batches=cfg.limit_val_batches,
+        limit_test_batches=cfg.limit_test_batches,
+        fast_dev_run=cfg.fast_dev_run,
         accelerator=cfg.accelerator.accelerator,
     )
+    print(cfg.run.mode)
 
 
-    if cfg.run.tune == True:
+    if cfg.run.mode == "tune":
         tune(trainer, model, datamodule)
 
-    if cfg.run.fit == True:
+    if cfg.run.mode == "fit":
         fit(trainer, model, datamodule, ckpt_path=cfg.chckpt_path)
 
-    if cfg.run.validate == True:
+    if cfg.run.mode == "validate":
         validate(trainer, model, datamodule)
 
-    if cfg.run.test == True:
+    if cfg.run.mode == "test":
         test(trainer, model, datamodule)
-    print("Done")
 
 
 if __name__ == "__main__":

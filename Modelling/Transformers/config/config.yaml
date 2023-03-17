@@ -1,16 +1,17 @@
-run:
-  fit: False
-  test: False
-  validate: False
-  tune: False
-
 seed: 42
 chckpt_path: null
+
+run:
+  mode: null
 
 # Run config
 max_epochs: 1
 log_every_n_steps: 1000
 val_check_interval: 0.2
+fast_dev_run: null
+limit_train_batches: null
+limit_val_batches: null
+limit_test_batches: null
 callbacks: []
 
 # Batchsize
@@ -24,5 +25,5 @@ defaults:
   - optimizer: ???
   - scheduler: ???
   - data: ???
-  - run: ???
+  - run: debug
 

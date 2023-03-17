@@ -1,0 +1,3 @@
+_target_: schedulers.get_linear_schedule_warmup
+num_warmup_steps: 0.1
+min_lr_ratio: 0.0

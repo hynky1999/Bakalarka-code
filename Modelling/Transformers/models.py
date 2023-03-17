@@ -91,7 +91,7 @@ class FineTunedClassifier(LoggingModel):
     ):
         super().__init__(num_classes, optimizer, scheduler)
         self.model = self.get_model(pretrained_model, num_classes)
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["optimizer", "scheduler"])
 
     @staticmethod
     def get_model(model_chp, num_dim):
@@ -165,7 +165,7 @@ class BaseModel(LightningModule):
 class LMModel(BaseModel):
     def __init__(self, pretrained_model, optimizer, scheduler):
         super().__init__(optimizer, scheduler)
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["optimizer", "scheduler"])
         self.model = AutoModelForMaskedLM.from_pretrained(pretrained_model)
         self.metrics = ModuleDict(
             {
@@ -181,13 +181,16 @@ class LMModel(BaseModel):
     def training_step(self, batch, batch_idx): 
         output = self(**batch)
         self.log("train/perplexity", self.metrics["train_metrics"](output.loss), logger=True, on_step=False, on_epoch=True)
+        return output.loss
 
     def validation_step(self, batch, batch_idx):
         output = self(**batch)
         self.log("val/perplexity", self.metrics["val_metrics"](output.loss), logger=True, on_epoch=True, on_step=False)
+        return output.loss
 
     def test_step(self, batch, batch_idx):
         output = self(**batch)
         self.log("test/perplexity", self.metrics["test_metrics"](output.loss), logger=True, on_epoch=True, on_step=False)
+        return output.loss
 
 
