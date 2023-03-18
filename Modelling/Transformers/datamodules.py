@@ -4,7 +4,8 @@ import numpy as np
 import scipy
 import torch
 import torch.sparse
-from transformers import AutoTokenizer, DataCollatorWithPadding, DataCollatorForLanguageModeling
+from transformers import AutoTokenizer, DataCollatorWithPadding 
+from utils import DataCollatorForLanguageModeling
 from datasets import load_dataset, load_from_disk
 from torch.utils.data import DataLoader
 from scipy.sparse import csr_matrix, coo_matrix
@@ -20,6 +21,7 @@ class NewsDataModule(LightningDataModule):
         cache_dir,
         max_length=512,
         batch_size=12,
+        pin_memory=False,
         limit=None,
         pad_mode=False,
         num_proc: int=4,
@@ -32,6 +34,7 @@ class NewsDataModule(LightningDataModule):
         self.max_length = max_length
         self.column = column
         self.trunc_type = trunc_type
+        self.pin_memory = pin_memory
 
         data_collator_pad = True if (pad_mode==False or pad_mode==True) else pad_mode
         self.data_collator = DataCollatorWithPadding(
@@ -40,7 +43,7 @@ class NewsDataModule(LightningDataModule):
         self.cache_dir = Path(cache_dir)
         self.limit = limit
         self.pad_mode = pad_mode
-        self.num_classes = load_dataset(str("hynky/czech_news_dataset")).features[column].num_classes - 1
+        self.num_classes = num_classes
 
 
     def prepare_split(self, split):
@@ -102,6 +105,7 @@ class NewsDataModule(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_proc,
             collate_fn=self.data_collator,
+            pin_memory=self.pin_memory,
             shuffle=shuffle,
         )
 
@@ -255,6 +259,7 @@ class NewsDataModuleForLM(LightningDataModule):
         max_length=512,
         mlm=0.15,
         batch_size=12,
+        pin_memory=True,
         limit=None,
         num_proc: int=4,
     ):
@@ -264,6 +269,8 @@ class NewsDataModuleForLM(LightningDataModule):
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
         self.max_length = max_length
         self.cache_dir = Path(cache_dir)
+        self.max_tokenizer_id = max(self.tokenizer.get_vocab().values())
+        self.pin_memory = pin_memory
         self.mlm  = mlm
         self.limit = limit
 
@@ -327,12 +334,14 @@ class NewsDataModuleForLM(LightningDataModule):
             self.test_dataset = self.load_split("test")
 
     def create_dataloader(self, dataset):
-        collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=self.mlm)
+        collator = DataCollatorForLanguageModeling(self.tokenizer, max_input_id=self.max_tokenizer_id, mlm_probability=self.mlm)
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
+            pin_memory=self.pin_memory,
             num_workers=self.num_proc,
             collate_fn=collator,
+            shuffle=False
         )
 
     def train_dataloader(self):

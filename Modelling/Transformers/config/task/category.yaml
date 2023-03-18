@@ -1,2 +1,4 @@
-column: category
-num_classes: 25
+name: category
+settings:
+  column: ${name}
+  num_classes: 25

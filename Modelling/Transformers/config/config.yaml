@@ -1,8 +1,8 @@
 seed: 42
-chckpt_path: null
 
 run:
   mode: null
+  chckpt_path: ???
 
 # Run config
 max_epochs: 1
@@ -18,6 +18,17 @@ callbacks: []
 batch_size: 2
 num_proc: 0
 
+accelerator:
+  pin_memory: false
+
+# Model
+model:
+  metrics:
+    patience: ???
+    monitor: ???
+    mode: ???
+
+
 defaults:
   - _self_
   - accelerator: cpu_single
@@ -26,4 +37,3 @@ defaults:
   - scheduler: ???
   - data: ???
   - run: debug
-

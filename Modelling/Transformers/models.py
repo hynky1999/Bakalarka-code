@@ -21,14 +21,38 @@ class LogitsOutput:
     loss: torch.Tensor
 
 
-class LoggingModel(LightningModule):
+class BaseModel(LightningModule):
+    def __init__(
+        self,
+        optimizer: CreateableOptimizer | None,
+        scheduler: CreateableScheduler | None,
+    ):
+        super().__init__()
+        self.optim = optimizer
+        self.scheduler = scheduler
+
+
+    def configure_optimizers(self):
+        optimizer = self.optim(self) if self.optim else None
+        if optimizer is None:
+            return None
+
+        scheduler = self.scheduler(optimizer, self.trainer) if self.scheduler else None
+        if scheduler is None:
+            return optimizer
+
+        return [optimizer], [scheduler.__dict__]
+
+
+
+class LoggingModel(BaseModel):
     def __init__(
         self,
         num_classes,
         optimizer: CreateableOptimizer | None,
         scheduler: CreateableScheduler | None,
     ):
-        super().__init__()
+        super().__init__(optimizer, scheduler)
         self.metrics = ModuleDict(
             {
                 "train_metrics": ModuleList(create_train_metrics(num_classes)),
@@ -48,7 +72,7 @@ class LoggingModel(LightningModule):
         log_metrics(self, predicted_labels, batch["labels"], "train")
         return output.loss
 
-    def training_epoch_end(self, outputs):
+    def on_training_epoch_end(self):
         reset_and_log_metrics(self, "train")
 
     def validation_step(self, batch, batch_idx):
@@ -61,7 +85,7 @@ class LoggingModel(LightningModule):
         )
         return output.loss
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         reset_and_log_metrics(self, "val")
 
     def test_step(self, batch, batch_idx):
@@ -74,7 +98,7 @@ class LoggingModel(LightningModule):
         )
         return output.loss
 
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         reset_and_log_metrics(self, "test")
 
     def forward(self) -> LogitsOutput:
@@ -104,29 +128,6 @@ class FineTunedClassifier(LoggingModel):
         return self.model(**kwargs)
 
 
-class FineTunedLM(LoggingModel):
-    def __init__(
-        self,
-        pretrained_model,
-        num_classes,
-        scheduler,
-        optimizer,
-    ):
-        super().__init__(num_classes, optimizer, scheduler)
-        self.model = self.get_model(pretrained_model, num_classes)
-        self.save_hyperparameters()
-
-    @staticmethod
-    def get_model(model_chp, num_dim):
-        model = AutoModelForMaskedLM.from_pretrained(
-            model_chp,
-        )
-        return model
-
-    def forward(self, **kwargs):
-        return self.model(**kwargs)
-
-
 class LinearRegressionModel(LoggingModel):
     def __init__(self, num_features, num_classes, scheduler, optimizer):
         super().__init__(num_classes, optimizer, scheduler)
@@ -139,28 +140,6 @@ class LinearRegressionModel(LoggingModel):
         loss = self.cross_entropy(logits, labels)
         return LogitsOutput(logits, loss)
 
-
-class BaseModel(LightningModule):
-    def __init__(
-        self,
-        optimizer: CreateableOptimizer | None,
-        scheduler: CreateableScheduler | None,
-    ):
-        super().__init__()
-        self.optim = optimizer
-        self.scheduler = scheduler
-
-
-    def configure_optimizers(self):
-        optimizer = self.optim(self) if self.optim else None
-        if optimizer is None:
-            return None
-
-        scheduler = self.scheduler(optimizer, self.trainer) if self.scheduler else None
-        if scheduler is None:
-            return optimizer
-
-        return [optimizer], [scheduler.__dict__]
 
 class LMModel(BaseModel):
     def __init__(self, pretrained_model, optimizer, scheduler):
@@ -180,7 +159,8 @@ class LMModel(BaseModel):
     
     def training_step(self, batch, batch_idx): 
         output = self(**batch)
-        self.log("train/perplexity", self.metrics["train_metrics"](output.loss), logger=True, on_step=False, on_epoch=True)
+        self.log("train/perplexity", self.metrics["train_metrics"](output.loss), logger=True, on_step=True, on_epoch=True)
+        self.log("train/loss", output.loss, logger=True, on_step=True, on_epoch=False)
         return output.loss
 
     def validation_step(self, batch, batch_idx):

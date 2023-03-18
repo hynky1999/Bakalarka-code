@@ -1,13 +1,16 @@
 # @package _global_
 run:
   mode: fit
-data:
-  batch_size: 1
+  chckpt_path: null
+  debug: True
+
+
+
 
 
 log_every_n_steps: 1
 val_check_interval: null
-limit_train_batches: 10
+limit_train_batches: 10000
 limit_val_batches: 10
 limit_test_batches: 10
 max_epochs: 4
