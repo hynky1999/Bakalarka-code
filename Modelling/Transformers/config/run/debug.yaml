@@ -10,7 +10,7 @@ run:
 
 log_every_n_steps: 1
 val_check_interval: null
-limit_train_batches: 10000
+limit_train_batches: 4
 limit_val_batches: 10
 limit_test_batches: 10
 max_epochs: 4

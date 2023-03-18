@@ -2,6 +2,7 @@ from typing import List, Union
 from lightning.pytorch.callbacks import BaseFinetuning
 from lightning.pytorch import LightningModule
 from torch.optim.optimizer import Optimizer
+
 import torch.nn as nn
 from utils import get_no_decay_groups
 
@@ -24,14 +25,9 @@ class GradualUnfreezingCallback(BaseFinetuning):
     def freeze_before_training(self, model):
         self.freeze(model)
         # Classifier unfreeze
-        if hasattr(model.model, "classifier"):
-            self.make_trainable(model.model.classifier)
-
-        if hasattr(model.model, "roberta") and hasattr(
-            model.model.roberta, "encoder"
-        ):
-            self.total_layers = len(model.model.roberta.encoder.layer)
-            self.last_unfrozen_layer = self.total_layers
+        self.make_trainable(model.model.classifier)
+        self.total_layers = len(model.model.roberta.encoder.layer)
+        self.last_unfrozen_layer = self.total_layers
 
     def finetune_function(
         self, model: LightningModule, epoch: int, optimizer: Optimizer
@@ -41,26 +37,28 @@ class GradualUnfreezingCallback(BaseFinetuning):
         if self.last_unfrozen_layer <= self.min_unfreeze_layer:
             return
 
+        # First epoch
+
         old_last_unfrozen_layer = self.last_unfrozen_layer
         self.last_unfrozen_layer = max(self.min_unfreeze_layer, self.last_unfrozen_layer - self.unfreeze_per_epoch)
+
+        
+        # Optims should have this
+        lr = optimizer.param_groups[-1]["initial_lr"]
+        decay = optimizer.param_groups[-1]["weight_decay"]
+
+        if old_last_unfrozen_layer != self.total_layers:
+            lr /= self.div_lr
 
 
         new_layers = model.model.roberta.encoder.layer[
             self.last_unfrozen_layer:old_last_unfrozen_layer
         ]
-        print(f"Unfreezing {self.last_unfrozen_layer}-{old_last_unfrozen_layer} layers")
+        print(f"Unfreezing {self.last_unfrozen_layer}-{old_last_unfrozen_layer} layers with lr {lr} and decay {decay}")
         self.make_trainable(new_layers)
-        # Not first unfreeze than apply discriminative learning rate
-        if old_last_unfrozen_layer == self.total_layers:
-            new_lr = optimizer.param_groups[0]["lr"]
-        else:
-            new_lr = optimizer.param_groups[-1]["lr"] / self.div_lr
-
-
-
-        decay = optimizer.param_groups[0]["weight_decay"]
-        param_groups = get_no_decay_groups(new_layers, new_lr, decay, ["bias", "LayerNorm.weight"])
-        optimizer.add_param_group(param_groups)
+        param_groups = get_no_decay_groups(new_layers, lr, decay, ["bias", "LayerNorm.weight"])
+        for param_group in param_groups:
+            optimizer.add_param_group(param_group)
         print(f"Total trainable params: {count_params(optimizer)}")
 
             
