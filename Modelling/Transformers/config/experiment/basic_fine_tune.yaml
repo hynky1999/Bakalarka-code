@@ -10,7 +10,7 @@ callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
     unfreeze_per_epoch: 2
     # Unfreeze just last 2 layers then stop -> Training with last 2 layers
-    min_unfreeze_layer: 6
+    min_unfreeze_layer: 10
 
 defaults:
   - override /data: news_tokenized

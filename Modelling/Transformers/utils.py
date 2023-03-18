@@ -14,6 +14,7 @@ def get_named_params(modules: nn.Module | List[nn.Module], requires_grad: bool =
                 yield param
 
 def get_no_decay_groups(modules, lr, weight_decay, no_decay_names):
+    # Use lr=0 to let scheduler handle it after unfreezing
     optimizer_grouped_parameters = [
         {
             "params": [
@@ -22,7 +23,8 @@ def get_no_decay_groups(modules, lr, weight_decay, no_decay_names):
                 if not any(nd in n for nd in no_decay_names)
             ],
             "weight_decay": weight_decay,
-            "lr": lr,
+            "initial_lr": lr,
+            "lr": 0,
         },
         {
             "params": [
@@ -31,7 +33,8 @@ def get_no_decay_groups(modules, lr, weight_decay, no_decay_names):
                 if any(nd in n for nd in no_decay_names)
             ],
             "weight_decay": 0.0,
-            "lr": lr,
+            "initial_lr": lr,
+            "lr": 0,
         },
     ]
     return optimizer_grouped_parameters
