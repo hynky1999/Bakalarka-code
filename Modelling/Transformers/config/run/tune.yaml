@@ -1,1 +1,7 @@
-mode: tune
+# @package _global_
+run:
+  mode: tune
+  chkcpt_path: null
+
+defaults:
+  - override /accelerator: gpu_single

@@ -1,2 +1,4 @@
-column: server
-num_classes: 6
+name: server
+settings:
+  column: ${task.name}
+  num_classes: 6

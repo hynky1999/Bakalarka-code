@@ -1,0 +1,6 @@
+# @package _global_
+num_proc: 8
+batch_size: 2
+
+run:
+  mode: "fit"

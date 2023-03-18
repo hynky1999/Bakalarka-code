@@ -1,0 +1,4 @@
+devices: 4
+accelerator: gpu
+strategy: ddp
+pin_memory: true

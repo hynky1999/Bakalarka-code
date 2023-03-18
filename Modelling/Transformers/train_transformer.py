@@ -30,7 +30,6 @@ def tune(trainer: Trainer, model, datamodule):
 
     lr_finder = tuner.lr_find(model=model, datamodule=datamodule)
     print(f"Found lr: {lr_finder.suggestion()}")
-    wandb.log({"lr_graph": lr_finder.plot(suggest=True)})
 
 
     
@@ -38,14 +37,17 @@ def tune(trainer: Trainer, model, datamodule):
 def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
     if "logger" in cfg:
-        logger = instantiate(cfg.logger, project=f"{cfg.task.name.capitalize()}-Deep-Learning")(config=vars(cfg))
+        project_name = f"{cfg.task.name.capitalize()}-Deep-Learning"
+        if "debug" in cfg.run:
+            project_name = f"Debug"
+        logger = instantiate(cfg.logger, project=project_name)(config=vars(cfg))
     else:
         logger = TensorBoardLogger("tb_logs", name=cfg.task.name)
 
     
 
-    datamodule_kwargs = OmegaConf.to_container(cfg.task.setting) if "setting" in cfg.task else {}
-    datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, **datamodule_kwargs)
+    datamodule_kwargs = OmegaConf.to_container(cfg.task.settings) if "settings" in cfg.task else {}
+    datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, pin_memory=cfg.accelerator.pin_memory ,**datamodule_kwargs)
     optimizer = instantiate(cfg.optimizer, _partial_=True) if "optimizer" in cfg else None
     scheduler = instantiate(cfg.scheduler, _partial_=True) if "scheduler" in cfg else None
     
@@ -56,11 +58,24 @@ def main(cfg: DictConfig) -> None:
     if hasattr(datamodule, "num_features"):
         model_kwargs["num_features"] = datamodule.num_features
 
-    model = instantiate(cfg.model, **model_kwargs)
+    if hasattr(datamodule, "num_classes"):
+        model_kwargs["num_classes"] = datamodule.num_classes
+    
+
+    model = instantiate(cfg.model.model, **model_kwargs)
 
     callbacks = [
-        Timer(interval="step",
-            duration="02:00:00:00"
+        ModelCheckpoint(
+            monitor=cfg.model.metrics.monitor,
+            save_top_k=1,
+            verbose=True,
+            mode=cfg.model.metrics.mode,
+        ),
+        EarlyStopping(
+            monitor=cfg.model.metrics.monitor,
+            patience=cfg.model.metrics.patience,
+            verbose=True,
+            mode=cfg.model.metrics.mode,
         ),
         LearningRateMonitor(logging_interval="step")
     ]
@@ -90,13 +105,13 @@ def main(cfg: DictConfig) -> None:
         tune(trainer, model, datamodule)
 
     if cfg.run.mode == "fit":
-        fit(trainer, model, datamodule, ckpt_path=cfg.chckpt_path)
+        fit(trainer, model, datamodule, ckpt_path=cfg.run.chckpt_path)
 
     if cfg.run.mode == "validate":
-        validate(trainer, model, datamodule)
+        validate(trainer, model, datamodule, ckpt_path=cfg.run.chckpt_path)
 
     if cfg.run.mode == "test":
-        test(trainer, model, datamodule)
+        test(trainer, model, datamodule, ckpt_path=cfg.run.chckpt_path)
 
 
 if __name__ == "__main__":

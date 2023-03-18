@@ -8,11 +8,12 @@ optimizer:
   lr: 5e-5
   weight_decay: 0
 
-trainer:
-  callbacks:
-    - _target_: callbacks.GradualUnfreezingCallback
-      unfreeze_per_epoch: 2
-      div_lr: 1/0.9
+callbacks:
+  - _target_: callbacks.GradualUnfreezingCallback
+    unfreeze_per_epoch: 2
+    # 1/0.9 = 1.11
+    div_lr: 1.1112
+
 
 
 defaults:
