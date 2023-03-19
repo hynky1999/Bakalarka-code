@@ -10,7 +10,7 @@ from transformers.modeling_outputs import MaskedLMOutput
 from metrics import create_test_metrics
 from metrics import create_val_metrics
 from metrics import create_train_metrics
-from metrics import reset_and_log_metrics, log_metrics, PerplexityFromLossMetric
+from metrics import log_metrics, PerplexityFromLossMetric
 from optims import CreateableOptimizer
 from schedulers import CreateableScheduler
 
@@ -45,7 +45,7 @@ class BaseModel(LightningModule):
 
 
 
-class LoggingModel(BaseModel):
+class ClassificationModel(BaseModel):
     def __init__(
         self,
         num_classes,
@@ -72,9 +72,6 @@ class LoggingModel(BaseModel):
         log_metrics(self, predicted_labels, batch["labels"], "train")
         return output.loss
 
-    def on_training_epoch_end(self):
-        reset_and_log_metrics(self, "train")
-
     def validation_step(self, batch, batch_idx):
         output = self(**batch)
         labels = batch["labels"]
@@ -85,8 +82,6 @@ class LoggingModel(BaseModel):
         )
         return output.loss
 
-    def on_validation_epoch_end(self):
-        reset_and_log_metrics(self, "val")
 
     def test_step(self, batch, batch_idx):
         output = self(**batch)
@@ -98,14 +93,11 @@ class LoggingModel(BaseModel):
         )
         return output.loss
 
-    def on_test_epoch_end(self):
-        reset_and_log_metrics(self, "test")
-
     def forward(self) -> LogitsOutput:
         raise NotImplementedError
 
 
-class FineTunedClassifier(LoggingModel):
+class FineTunedClassifier(ClassificationModel):
     def __init__(
         self,
         pretrained_model,
@@ -128,7 +120,7 @@ class FineTunedClassifier(LoggingModel):
         return self.model(**kwargs)
 
 
-class LinearRegressionModel(LoggingModel):
+class LinearRegressionModel(ClassificationModel):
     def __init__(self, num_features, num_classes, scheduler, optimizer):
         super().__init__(num_classes, optimizer, scheduler)
         self.save_hyperparameters()

@@ -2,7 +2,7 @@
 batch_size: 8
 
 optimizer:
-  lr: 2e-5
+  lr: 9e-6
   betas: [0.9, 0.98]
   weight_decay: 0
 

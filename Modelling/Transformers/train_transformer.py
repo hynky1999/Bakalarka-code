@@ -97,6 +97,7 @@ def main(cfg: DictConfig) -> None:
         limit_test_batches=cfg.limit_test_batches,
         fast_dev_run=cfg.fast_dev_run,
         accelerator=cfg.accelerator.accelerator,
+        accumulate_grad_batches=cfg.accelerator.accumulate_grad_batches,
     )
     print(cfg.run.mode)
 

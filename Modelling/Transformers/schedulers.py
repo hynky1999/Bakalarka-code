@@ -4,12 +4,13 @@ from typing import Callable
 import torch
 from lightning.pytorch import Trainer
 from transformers.optimization import get_linear_schedule_with_warmup
+from torch.optim.lr_scheduler import LambdaLR
 from dynam_lambda_lr import DynamicLambdaLR
 
 
 @dataclass
 class SchedulerConfig:
-    scheduler: torch.optim.lr_scheduler._LRScheduler
+    scheduler: torch.optim.lr_scheduler.LRScheduler
     interval: str = "step"
     frequency: int = 1
 
@@ -45,7 +46,6 @@ def get_linear_schedule_for_discriminiative_lr(
     num_warmup_steps: float,
     total_unfreezes,
     groups_per_unfreeze: int,
-    freeze_every_epoch: int=1,
 ):
 
     assert trainer.max_epochs != None and trainer.estimated_stepping_batches != None
@@ -64,10 +64,10 @@ def get_linear_schedule_for_discriminiative_lr(
             0.0,
             offset=0,
         )
-        for _ in range(2)
+        for _ in range(groups_per_unfreeze)
     ]
     for i in range(total_unfreezes):
-        offset = i * steps_per_epoch * freeze_every_epoch
+        offset = i * steps_per_epoch
         remaining_steps = training_steps - offset
         pg_lambdas.extend(
             [
@@ -77,7 +77,7 @@ def get_linear_schedule_for_discriminiative_lr(
                     0.0,
                     offset=offset,
                 )
-                for _ in range(2 * groups_per_unfreeze)
+                for _ in range(groups_per_unfreeze)
             ]
         )
 
@@ -99,15 +99,14 @@ def get_linear_schedule_warmup(
         num_warmup_steps = int(total_steps * num_warmup_steps)
 
     return SchedulerConfig(
-        scheduler=DynamicLambdaLR(
-            optimizer,
-            get_slated_lambda(
-                optimizer, num_warmup_steps, total_steps, min_lr_ratio=min_lr_ratio
-            ),
-        ),
-        interval="step",
-        frequency=1,
-    )
+        scheduler=LambdaLR(
+            optimizer=optimizer,
+            lr_lambda=get_slated_lambda(
+                num_warmup_steps, total_steps, min_lr_ratio=min_lr_ratio
+            )),
+            interval="step",
+            frequency=1,
+        )
 
 
 # As per smith with recommended epochs_per_cycle

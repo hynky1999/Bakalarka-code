@@ -100,28 +100,12 @@ def log_metrics(model, predicted_labels, labels, split):
             if metric.metadata.step:
                 step_value = metric(predicted_labels, labels)
                 model.log(
-                    f"{split}/{metric.metadata.readable_name}_step",
+                    f"{split}/{metric.metadata.readable_name}",
                     step_value,
                     logger=True,
                 )
             else:
                 metric.update(predicted_labels, labels)
-
-def reset_and_log_metrics(model, split):
-    for metric in model.metrics[split + "_metrics"]:
-        metric: MetricWithMetadata
-        if metric.metadata.epoch:
-            # Kinda monkey patched
-            if metric.real_type == MulticlassConfusionMatrix:
-                cm = metric.compute()
-                log_confussion_matrix(model, cm, split)
-            else:
-                model.log(
-                    f"{split}/{metric.metadata.readable_name}_epoch",
-                    metric.compute(),
-                    logger=True,
-                )
-        metric.reset()
 
 
 class PerplexityFromLossMetric(Metric):
