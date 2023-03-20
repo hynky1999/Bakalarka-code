@@ -1,17 +1,9 @@
 # @package _global_
-batch_size: 12
+batch_size: 8
 
 optimizer:
   lr: 2e-5
   weight_decay: 0
-
-callbacks:
-  - _target_: callbacks.GradualUnfreezingCallback
-    unfreeze_per_epoch: 2
-    # 1/0.9 = 1.11
-    div_lr: 1.1112
-
-
 
 defaults:
   - override /data: news_tokenized
@@ -19,4 +11,4 @@ defaults:
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 7
+max_epochs: 6

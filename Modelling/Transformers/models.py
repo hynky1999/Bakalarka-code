@@ -7,7 +7,7 @@ from transformers import AutoModelForSequenceClassification, AutoModelForMaskedL
 from typing import Callable
 from transformers.optimization import get_linear_schedule_with_warmup
 from transformers.modeling_outputs import MaskedLMOutput
-from metrics import create_test_metrics
+from metrics import create_test_metrics, create_metric
 from metrics import create_val_metrics
 from metrics import create_train_metrics
 from metrics import log_metrics, PerplexityFromLossMetric
@@ -69,14 +69,14 @@ class ClassificationModel(BaseModel):
             "train/loss_step", output.loss, logger=True, on_step=True, on_epoch=False
         )
         predicted_labels = torch.argmax(output.logits, dim=1)
-        log_metrics(self, predicted_labels, batch["labels"], "train")
+        log_metrics(self, preds=predicted_labels, target=batch["labels"], split="train")
         return output.loss
 
     def validation_step(self, batch, batch_idx):
         output = self(**batch)
         labels = batch["labels"]
         predicted_labels = torch.argmax(output.logits, dim=1)
-        log_metrics(self, predicted_labels, labels, "val")
+        log_metrics(self, preds=predicted_labels, target=labels, split="val")
         self.log(
             "val/loss_epoch", output.loss, logger=True, on_epoch=True, on_step=False
         )
@@ -87,9 +87,9 @@ class ClassificationModel(BaseModel):
         output = self(**batch)
         labels = batch["labels"]
         predicted_labels = torch.argmax(output.logits, dim=1)
-        log_metrics(self, predicted_labels, labels, "test")
+        log_metrics(self, preds=predicted_labels, target=labels, split="test")
         self.log(
-            "val/loss_epoch", output.loss, logger=True, on_epoch=True, on_step=False
+            "test/loss_epoch", output.loss, logger=True, on_epoch=True, on_step=False
         )
         return output.loss
 
@@ -140,9 +140,9 @@ class LMModel(BaseModel):
         self.model = AutoModelForMaskedLM.from_pretrained(pretrained_model)
         self.metrics = ModuleDict(
             {
-                "train_metrics": PerplexityFromLossMetric(),
-                "val_metrics": PerplexityFromLossMetric(),
-                "test_metrics": PerplexityFromLossMetric(),
+                "train_metrics": ModuleList([create_metric("perplexity", step=True)]),
+                "val_metrics": ModuleList([create_metric("perplexity", epoch=True)]),
+                "test_metrics": ModuleList([create_metric("perplexity", epoch=True)]),
             }
         )
     
@@ -151,18 +151,18 @@ class LMModel(BaseModel):
     
     def training_step(self, batch, batch_idx): 
         output = self(**batch)
-        self.log("train/perplexity", self.metrics["train_metrics"](output.loss), logger=True, on_step=True, on_epoch=True)
+        log_metrics(self, loss=output.loss, split="train")
         self.log("train/loss", output.loss, logger=True, on_step=True, on_epoch=False)
         return output.loss
 
     def validation_step(self, batch, batch_idx):
         output = self(**batch)
-        self.log("val/perplexity", self.metrics["val_metrics"](output.loss), logger=True, on_epoch=True, on_step=False)
+        log_metrics(self, loss=output.loss, split="val")
         return output.loss
 
     def test_step(self, batch, batch_idx):
         output = self(**batch)
-        self.log("test/perplexity", self.metrics["test_metrics"](output.loss), logger=True, on_epoch=True, on_step=False)
+        log_metrics(self, loss=output.loss, split="test")
         return output.loss
 
 

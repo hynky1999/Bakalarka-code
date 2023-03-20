@@ -110,6 +110,7 @@ class NewsDataModule(LightningDataModule):
         )
 
     def train_dataloader(self):
+        print("Creating train dataloader")
         return self.create_dataloader(self.train_dataset, shuffle=True)
 
     def val_dataloader(self):

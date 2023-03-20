@@ -13,9 +13,10 @@ def count_params(opt: Optimizer, grad: bool = True):
 
 
 class GradualUnfreezingCallback(BaseFinetuning):
-    def __init__(self, unfreeze_per_epoch: int, div_lr: float = 2.6, min_unfreeze_layer: int = 0):
+    def __init__(self, unfreeze_per_epoch: int, div_lr: float = 2.6, min_unfreeze_layer: int = 0, remove_batches: int = 0):
         super().__init__()
         self.unfreeze_per_epoch = unfreeze_per_epoch
+        self.remove_batches = remove_batches
         self.last_unfrozen_layer = 0
         self.total_layers = 0
         self.div_lr = div_lr
@@ -37,7 +38,21 @@ class GradualUnfreezingCallback(BaseFinetuning):
         if self.last_unfrozen_layer <= self.min_unfreeze_layer:
             return
 
-        # First epoch
+        # # First epoch
+        # cur_batch_size = model.trainer.train_dataloader.batch_size
+        # # If we have a batch size of 1, we don't want to remove batches
+        # new_batch_size = cur_batch_size - self.remove_batches
+        # if new_batch_size <= 0:
+        #     new_batch_size = 1
+        
+        # new_accum = model.trainer.accumulate_grad_batches * cur_batch_size // new_batch_size
+        # if new_accum * new_batch_size != model.trainer.accumulate_grad_batches * cur_batch_size:
+        #     raise ValueError("Failed to keep effective batch size")
+        
+        # model.trainer.accumulate_grad_batches = new_accum
+        # model.trainer.train_dataloader.batch_size = new_batch_size
+
+
 
         old_last_unfrozen_layer = self.last_unfrozen_layer
         self.last_unfrozen_layer = max(self.min_unfreeze_layer, self.last_unfrozen_layer - self.unfreeze_per_epoch)

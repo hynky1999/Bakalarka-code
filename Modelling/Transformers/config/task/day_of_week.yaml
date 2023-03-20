@@ -1,2 +1,4 @@
-column: day_of_week
-num_classes: 7
+name: day_of_week
+settings:
+  column: ${task.name}
+  num_classes: 7

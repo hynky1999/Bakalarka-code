@@ -32,10 +32,23 @@ def tune(trainer: Trainer, model, datamodule):
     print(f"Found lr: {lr_finder.suggestion()}")
 
 
+def set_effective_batch_size(needed_size, devices, batch_size):
+    acc_batches = needed_size // (devices * batch_size)
+    if acc_batches * (devices * batch_size) != needed_size:
+        raise ValueError(
+            f"Effective batch size should be divisible by {devices * batch_size}"
+        )
+    return acc_batches
     
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
+    acc_batches = 1
+    if cfg.effective_batch_size != -1:
+        acc_batches = set_effective_batch_size(cfg.effective_batch_size, cfg.accelerator.devices, cfg.batch_size)
+    print(f"Accumulate batches: {acc_batches}")
+
+
     if "logger" in cfg:
         project_name = f"{cfg.task.name.capitalize()}-Deep-Learning"
         if "debug" in cfg.run:
@@ -67,7 +80,7 @@ def main(cfg: DictConfig) -> None:
     callbacks = [
         ModelCheckpoint(
             monitor=cfg.model.metrics.monitor,
-            save_top_k=1,
+            save_top_k=2,
             verbose=True,
             mode=cfg.model.metrics.mode,
         ),
@@ -97,10 +110,8 @@ def main(cfg: DictConfig) -> None:
         limit_test_batches=cfg.limit_test_batches,
         fast_dev_run=cfg.fast_dev_run,
         accelerator=cfg.accelerator.accelerator,
-        accumulate_grad_batches=cfg.accelerator.accumulate_grad_batches,
+        accumulate_grad_batches=acc_batches,
     )
-    print(cfg.run.mode)
-
 
     if cfg.run.mode == "tune":
         tune(trainer, model, datamodule)

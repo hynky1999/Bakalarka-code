@@ -7,7 +7,8 @@ run:
 
 log_every_n_steps: 1
 val_check_interval: null
-limit_train_batches: 4
-limit_val_batches: 2
+limit_train_batches: 1
+limit_val_batches: 1
 limit_test_batches: 2
-max_epochs: 4
+# Don't check effective batch size
+effective_batch_size: -1
