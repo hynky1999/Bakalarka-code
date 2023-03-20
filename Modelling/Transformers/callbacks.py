@@ -50,7 +50,8 @@ class GradualUnfreezingCallback(BaseFinetuning):
         #     raise ValueError("Failed to keep effective batch size")
         
         # model.trainer.accumulate_grad_batches = new_accum
-        # model.trainer.train_dataloader.batch_size = new_batch_size
+        model.trainer.train_dataloader. batch_size = new_batch_size
+        mo
 
 
 

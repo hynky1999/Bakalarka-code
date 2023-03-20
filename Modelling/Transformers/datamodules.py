@@ -12,6 +12,76 @@ from scipy.sparse import csr_matrix, coo_matrix
 from lightning import LightningDataModule
 
 
+# class DynamicBatchModule(LightningDataModule):
+#     def __init__(
+#             self,
+#             num_proc: int=4,
+#             batch_size: int=12,
+#             batch_degradation: int=0,
+#             batch_degradation_max_epoch: int=0,
+#             raise_on_inconsitent_eff_batch_size: bool=True,
+#             pin_memory: bool=False,
+#     ):
+#         super().__init__()
+#         self.starting_batch_size = batch_size
+#         self.batch_size = batch_size
+#         self.num_proc = num_proc
+#         self.pin_memory = pin_memory
+#         self.batch_degradation = batch_degradation
+#         self.batch_degradation_max_epoch = batch_degradation_max_epoch
+#         self.effective_batch_size = None
+
+
+#     def get_adjusted_effective_batch_size(self):
+#         new_accumulated_batches = self.effective_batch_size // self.batch_size
+#         if new_accumulated_batches == 0:
+#             new_accumulated_batches = 1
+
+#         if new_accumulated_batches * batch_size != effective_batch_size and self.raise_on_inconsitent_eff_batch_size:
+#             raise ValueError("Inconsistent effective batch size")
+
+
+#         return new_accumulated_batches
+        
+        
+
+#     def adjust_batch_size(self):
+#         if self.trainer is None:
+#             return
+        
+#         # We have trainer get the effective batch size
+#         if self.effective_batch_size is None:
+#             self.effective_batch_size = self.trainer.accumulated_batches_processed * self.batch_size
+        
+#         if self.trainer.current_epoch > self.batch_degradation_max_epoch:
+#             return
+        
+#         new_batch_size = max(1, self.starting_batch_size.batch_size - self.trainer.current_epoch * self.batch_degradation)
+#         if self.batch_size != new_batch_size:
+#             self.batch_size = new_batch_size
+#             self.trainer.effective_batch_size = self.get_adjusted_effective_batch_size()
+
+#     def train_dataloader(self):
+#         self.adjust_batch_size()
+#         return _train_dataloader()
+    
+#     def val_dataloader(self):
+#         self.adjust_batch_size()
+#         return _val_dataloader()
+    
+#     def test_dataloader(self):
+#         self.adjust_batch_size()
+#         return _test_dataloader()
+
+
+
+
+    
+
+
+
+
+
 class NewsDataModule(LightningDataModule):
     def __init__(
         self,

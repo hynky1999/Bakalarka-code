@@ -110,6 +110,7 @@ def main(cfg: DictConfig) -> None:
         limit_test_batches=cfg.limit_test_batches,
         fast_dev_run=cfg.fast_dev_run,
         accelerator=cfg.accelerator.accelerator,
+        reload_dataloaders_every_n_epochs=cfg.dataloader.reload_every_n_epochs,
         accumulate_grad_batches=acc_batches,
     )
 
