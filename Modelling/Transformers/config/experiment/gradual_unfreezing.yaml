@@ -1,6 +1,8 @@
 # @package _global_
 
-batch_size: 11
+# Can't run at start 64 as wouldn't work with 2 GPUs
+# due to effective batch size
+batch_size: [48, 32, 24, 16, 16, 12]
 
 optimizer:
   lr: 2e-5
@@ -13,11 +15,10 @@ callbacks:
     div_lr: 1.1112
 
 
-
 defaults:
   - override /data: news_tokenized
   - override /scheduler: linear_for_freezing
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 6
+max_epochs: 7

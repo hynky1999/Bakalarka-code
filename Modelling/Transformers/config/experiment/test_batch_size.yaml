@@ -1,5 +1,7 @@
 # @package _global_
 batch_size: 64
+# Enforce usage of effective batch size even in debug
+effective_batch_size: 192
 
 optimizer:
   lr: 2e-5
@@ -7,12 +9,11 @@ optimizer:
 
 callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
-    unfreeze_per_epoch: 2
-    # Unfreeze just last 2 layers then stop -> Training with last 2 layers
-    min_unfreeze_layer: 10
+    unfreeze_per_epoch: 4
 
-scheduler:
-  total_unfreezes: 1
+
+data:
+  pad_mode: "max_length"
 
 defaults:
   - override /data: news_tokenized
@@ -20,4 +21,4 @@ defaults:
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 6
+max_epochs: 1

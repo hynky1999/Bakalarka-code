@@ -2,4 +2,3 @@ _target_: schedulers.get_linear_schedule_for_discriminiative_lr
 num_warmup_steps: 0.1
 total_unfreezes: 6
 groups_per_unfreeze: 2
-freeze_every_epoch: 1

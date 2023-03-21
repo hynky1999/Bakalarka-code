@@ -1,24 +1,22 @@
 # @package _global_
-
-data:
-  batch_size: 11
-  num_proc: 0
+batch_size: 8
 
 optimizer:
   lr: 2e-5
   weight_decay: 0
 
-trainer:
-  callbacks:
-    - _target_: callbacks.GradualUnfreezingCallback
-      unfreeze_per_epoch: 2
-      div_lr: 1/0.9
+callbacks:
+  - _target_: callbacks.GradualUnfreezingCallback
+    unfreeze_per_epoch: 2
+    # 1/0.9 = 1.11
+    div_lr: 1.1112
+
 
 
 defaults:
   - override /data: news_tokenized
-  - override /scheduler: linear_warmup
+  - override /scheduler: linear_for_freezing
   - override /optimizer: adamW
   - override /model: hyneczech_class
 
-max_epochs: 4
+max_epochs: 6

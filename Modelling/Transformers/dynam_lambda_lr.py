@@ -1,8 +1,8 @@
 import types
 import warnings
-from torch.optim.lr_scheduler import _LRScheduler, LambdaLR
+from torch.optim.lr_scheduler import LRScheduler, LambdaLR
 
-class DynamicLambdaLR(_LRScheduler):
+class DynamicLambdaLR(LRScheduler):
     def __init__(self, optimizer, lr_lambda, last_epoch=-1, verbose=False):
         self.optimizer = optimizer
         if not isinstance(lr_lambda, list) and not isinstance(lr_lambda, tuple):
@@ -53,11 +53,13 @@ class DynamicLambdaLR(_LRScheduler):
                 self.lr_lambdas[idx].__dict__.update(fn)
 
     def get_lr(self):
-        if len(self.base_lrs) != len(self.optimizer.param_groups):
+        len_optimizer_param_groups = len(self.optimizer.param_groups)
+        if len(self.base_lrs) != len_optimizer_param_groups:
             warnings.warn("Number of base lrs does not match number of optimizer groups.")
             self.base_lrs = [group['initial_lr'] for group in self.optimizer.param_groups]
 
-        if len(self.lr_lambdas) < len(self.optimizer.param_groups):
+        if len(self.lr_lambdas) < len_optimizer_param_groups:
+            warnings.warn("Number of lambdas is less than number of optimizer groups.")
             self.lr_lambdas = [self.lr_lambdas[0] for _ in self.optimizer.param_groups]
 
         return [base_lr * lmbda(self.last_epoch)

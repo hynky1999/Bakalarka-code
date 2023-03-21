@@ -1,4 +1,4 @@
 name: category
 settings:
-  column: ${name}
+  column: ${task.name}
   num_classes: 25
