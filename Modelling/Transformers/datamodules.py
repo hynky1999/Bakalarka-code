@@ -10,95 +10,99 @@ from datasets import load_dataset, load_from_disk
 from torch.utils.data import DataLoader
 from scipy.sparse import csr_matrix, coo_matrix
 from lightning import LightningDataModule
+from typing import List
 
 
-# class DynamicBatchModule(LightningDataModule):
-#     def __init__(
-#             self,
-#             num_proc: int=4,
-#             batch_size: int=12,
-#             batch_degradation: int=0,
-#             batch_degradation_max_epoch: int=0,
-#             raise_on_inconsitent_eff_batch_size: bool=True,
-#             pin_memory: bool=False,
-#     ):
-#         super().__init__()
-#         self.starting_batch_size = batch_size
-#         self.batch_size = batch_size
-#         self.num_proc = num_proc
-#         self.pin_memory = pin_memory
-#         self.batch_degradation = batch_degradation
-#         self.batch_degradation_max_epoch = batch_degradation_max_epoch
-#         self.effective_batch_size = None
+class DynamicBatchModule(LightningDataModule):
+    def __init__(
+            self,
+            batch_size: List[int] | int,
+            effective_batch_size: int | None,
+        ):
+        super().__init__()
+        if isinstance(batch_size, int):
+            batch_size = [batch_size]
+        self.batch_sizes = batch_size
+        self.effective_batch_size = effective_batch_size
+        self.batch_size = batch_size[0]
 
 
-#     def get_adjusted_effective_batch_size(self):
-#         new_accumulated_batches = self.effective_batch_size // self.batch_size
-#         if new_accumulated_batches == 0:
-#             new_accumulated_batches = 1
-
-#         if new_accumulated_batches * batch_size != effective_batch_size and self.raise_on_inconsitent_eff_batch_size:
-#             raise ValueError("Inconsistent effective batch size")
+    def adjust_grad_accum(self):
+        if self.effective_batch_size is None:
+            return
 
 
-#         return new_accumulated_batches
+        devices = self.trainer.num_devices * self.trainer.num_nodes
+        new_accumulated_batches = self.effective_batch_size // (self.batch_size * devices)
+        if new_accumulated_batches == 0:
+            new_accumulated_batches = 1
+
+        if new_accumulated_batches * (self.batch_size * devices) != self.effective_batch_size:
+            raise ValueError("Inconsistent effective batch size")
+
+        self.trainer.accumulate_grad_batches = new_accumulated_batches
+        print(f"Next accumulated batches: {new_accumulated_batches}")
+
+
+    def adjust_batch_size(self):
+        if self.trainer is None:
+            return
         
-        
+        new_batch_size = self.batch_sizes[self.trainer.current_epoch] if self.trainer.current_epoch < len(self.batch_sizes) else self.batch_sizes[-1]
+        if self.batch_size != new_batch_size:
+            self.batch_size = new_batch_size
 
-#     def adjust_batch_size(self):
-#         if self.trainer is None:
-#             return
-        
-#         # We have trainer get the effective batch size
-#         if self.effective_batch_size is None:
-#             self.effective_batch_size = self.trainer.accumulated_batches_processed * self.batch_size
-        
-#         if self.trainer.current_epoch > self.batch_degradation_max_epoch:
-#             return
-        
-#         new_batch_size = max(1, self.starting_batch_size.batch_size - self.trainer.current_epoch * self.batch_degradation)
-#         if self.batch_size != new_batch_size:
-#             self.batch_size = new_batch_size
-#             self.trainer.effective_batch_size = self.get_adjusted_effective_batch_size()
+        # If we won't have new batch size, we don't need to reload the dataloader
+        if self.trainer.current_epoch + 1 < len(self.batch_sizes):
+            self.trainer.reload_dataloaders_every_n_epochs = 1
+        else:
+            print("Won't reload dataloaders")
+            self.trainer.reload_dataloaders_every_n_epochs = 0
 
-#     def train_dataloader(self):
-#         self.adjust_batch_size()
-#         return _train_dataloader()
+        print(f"Next batch size: {self.batch_size}")
+
+    def _train_dataloader(self) -> DataLoader:
+        raise NotImplementedError()
+
+    def _val_dataloader(self) -> DataLoader:
+        raise NotImplementedError()
     
-#     def val_dataloader(self):
-#         self.adjust_batch_size()
-#         return _val_dataloader()
+    def _test_dataloader(self) -> DataLoader:
+        raise NotImplementedError()
+
+    def train_dataloader(self):
+        self.adjust_batch_size()
+        self.adjust_grad_accum()
+        return self._train_dataloader()
     
-#     def test_dataloader(self):
-#         self.adjust_batch_size()
-#         return _test_dataloader()
-
-
-
-
+    def val_dataloader(self):
+        self.adjust_batch_size()
+        self.adjust_grad_accum()
+        return self._val_dataloader()
     
+    def test_dataloader(self):
+        self.adjust_batch_size()
+        self.adjust_grad_accum()
+        return self._test_dataloader()
 
 
-
-
-
-class NewsDataModule(LightningDataModule):
+class NewsDataModule(DynamicBatchModule):
     def __init__(
         self,
         column,
         num_classes,
         tokenizer,
         cache_dir,
+        effective_batch_size: int | None,
         max_length=512,
-        batch_size=12,
+        batch_size: List | int = 12,
         pin_memory=False,
         limit=None,
-        pad_mode=False,
         num_proc: int=4,
+        pad_mode=True,
         trunc_type="start",
     ):
-        super().__init__()
-        self.batch_size = batch_size
+        super().__init__(batch_size, effective_batch_size)
         self.num_proc = num_proc
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
         self.max_length = max_length
@@ -179,14 +183,13 @@ class NewsDataModule(LightningDataModule):
             shuffle=shuffle,
         )
 
-    def train_dataloader(self):
-        print("Creating train dataloader")
+    def _train_dataloader(self):
         return self.create_dataloader(self.train_dataset, shuffle=True)
 
-    def val_dataloader(self):
+    def _val_dataloader(self):
         return self.create_dataloader(self.val_dataset)
 
-    def test_dataloader(self):
+    def _test_dataloader(self):
         return self.create_dataloader(self.test_dataset)
 
 
@@ -322,20 +325,20 @@ class NewsTfidfDataModule(LightningDataModule):
 
 
 
-class NewsDataModuleForLM(LightningDataModule):
+class NewsDataModuleForLM(DynamicBatchModule):
     def __init__(
         self,
         tokenizer,
         cache_dir,
+        batch_size: List[int] | int,
+        effective_batch_size: int | None,
         max_length=512,
         mlm=0.15,
-        batch_size=12,
         pin_memory=True,
         limit=None,
         num_proc: int=4,
     ):
-        super().__init__()
-        self.batch_size = batch_size
+        super().__init__(batch_size, effective_batch_size)
         self.num_proc = num_proc
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
         self.max_length = max_length

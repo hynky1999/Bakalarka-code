@@ -1,8 +1,7 @@
 # @package _global_
-
-# Can't run at start 64 as wouldn't work with 2 GPUs
-# due to effective batch size
-batch_size: [48, 32, 24, 16, 16, 12]
+batch_size: 64
+# Enforce usage of effective batch size even in debug
+effective_batch_size: 192
 
 optimizer:
   lr: 2e-5
@@ -10,10 +9,11 @@ optimizer:
 
 callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
-    unfreeze_per_epoch: 2
-    # 1/0.9 = 1.11
-    div_lr: 1.1112
+    unfreeze_per_epoch: 4
 
+
+data:
+  pad_mode: "max_length"
 
 defaults:
   - override /data: news_tokenized
@@ -21,4 +21,4 @@ defaults:
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 7
+max_epochs: 1

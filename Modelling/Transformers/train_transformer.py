@@ -43,10 +43,6 @@ def set_effective_batch_size(needed_size, devices, batch_size):
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
-    acc_batches = 1
-    if cfg.effective_batch_size != -1:
-        acc_batches = set_effective_batch_size(cfg.effective_batch_size, cfg.accelerator.devices, cfg.batch_size)
-    print(f"Accumulate batches: {acc_batches}")
 
 
     if "logger" in cfg:
@@ -60,7 +56,7 @@ def main(cfg: DictConfig) -> None:
     
 
     datamodule_kwargs = OmegaConf.to_container(cfg.task.settings) if "settings" in cfg.task else {}
-    datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, pin_memory=cfg.accelerator.pin_memory ,**datamodule_kwargs)
+    datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, pin_memory=cfg.accelerator.pin_memory,effective_batch_size=cfg.effective_batch_size ,**datamodule_kwargs)
     optimizer = instantiate(cfg.optimizer, _partial_=True) if "optimizer" in cfg else None
     scheduler = instantiate(cfg.scheduler, _partial_=True) if "scheduler" in cfg else None
     
@@ -77,10 +73,11 @@ def main(cfg: DictConfig) -> None:
 
     model = instantiate(cfg.model.model, **model_kwargs)
 
+
     callbacks = [
         ModelCheckpoint(
             monitor=cfg.model.metrics.monitor,
-            save_top_k=2,
+            save_top_k=1,
             verbose=True,
             mode=cfg.model.metrics.mode,
         ),
@@ -110,8 +107,6 @@ def main(cfg: DictConfig) -> None:
         limit_test_batches=cfg.limit_test_batches,
         fast_dev_run=cfg.fast_dev_run,
         accelerator=cfg.accelerator.accelerator,
-        reload_dataloaders_every_n_epochs=cfg.dataloader.reload_every_n_epochs,
-        accumulate_grad_batches=acc_batches,
     )
 
     if cfg.run.mode == "tune":

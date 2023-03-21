@@ -1,9 +1,17 @@
 # @package _global_
-batch_size: 8
+
+# Can't run at start 64 as wouldn't work with 2 GPUs
+# due to effective batch size
+batch_size: 12
 
 optimizer:
   lr: 2e-5
   weight_decay: 0
+
+callbacks:
+  - _target_: callbacks.GradualUnfreezingCallback
+    unfreeze_per_epoch: 12
+
 
 defaults:
   - override /data: news_tokenized
@@ -11,4 +19,4 @@ defaults:
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 6
+max_epochs: 7

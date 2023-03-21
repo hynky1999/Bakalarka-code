@@ -1,2 +1,4 @@
-column: authors_cum_gender
-num_classes: 3
+name: authors_cum_gender
+settings:
+  column: ${task.name}
+  num_classes: 3
