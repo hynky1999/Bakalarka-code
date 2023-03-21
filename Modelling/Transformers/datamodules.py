@@ -418,11 +418,11 @@ class NewsDataModuleForLM(DynamicBatchModule):
             shuffle=False
         )
 
-    def train_dataloader(self):
+    def _train_dataloader(self):
         return self.create_dataloader(self.train_dataset)
 
-    def val_dataloader(self):
+    def _val_dataloader(self):
         return self.create_dataloader(self.val_dataset)
 
-    def test_dataloader(self):
+    def _test_dataloader(self):
         return self.create_dataloader(self.test_dataset)
