@@ -6,20 +6,22 @@ run:
 
 # Run config
 max_epochs: 1
-log_every_n_steps: 1000
-val_check_interval: 0.2
-fast_dev_run: null
-limit_train_batches: null
-limit_val_batches: null
+log_every_n_steps: 100
+val_check_interval: 0.1
+limit_val_batches: 0.125
 limit_test_batches: null
+limit_train_batches: null
+fast_dev_run: null
 callbacks: []
 
 # Batchsize
+effective_batch_size: 48
 batch_size: 2
 num_proc: 0
 
 accelerator:
   pin_memory: false
+  accumulate_grad_batches: 1
 
 # Model
 model:

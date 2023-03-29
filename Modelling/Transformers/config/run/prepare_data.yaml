@@ -4,3 +4,12 @@ batch_size: 2
 
 run:
   mode: "fit"
+
+
+
+log_every_n_steps: null
+val_check_interval: null
+limit_train_batches: 1
+limit_val_batches: 1
+limit_test_batches: 1
+effective_batch_size: null

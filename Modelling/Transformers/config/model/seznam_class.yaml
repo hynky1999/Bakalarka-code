@@ -1,6 +1,6 @@
 model:
   _target_: models.FineTunedClassifier
-  pretrained_model: "ufal/robeczech-base"
+  pretrained_model: "Seznam/small-e-czech"
 
 metrics:
   patience: 5

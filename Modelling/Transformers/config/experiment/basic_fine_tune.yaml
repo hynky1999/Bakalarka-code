@@ -1,6 +1,5 @@
 # @package _global_
-data:
-  batch_size: 64
+batch_size: 64
 
 optimizer:
   lr: 2e-5
@@ -10,12 +9,15 @@ callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
     unfreeze_per_epoch: 2
     # Unfreeze just last 2 layers then stop -> Training with last 2 layers
-    min_unfreeze_layer: 6
+    min_unfreeze_layer: 10
+
+scheduler:
+  total_unfreezes: 1
 
 defaults:
   - override /data: news_tokenized
-  - override /scheduler: linear_warmup
+  - override /scheduler: linear_for_freezing
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 6
+max_epochs: 4

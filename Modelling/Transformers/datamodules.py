@@ -10,25 +10,99 @@ from datasets import load_dataset, load_from_disk
 from torch.utils.data import DataLoader
 from scipy.sparse import csr_matrix, coo_matrix
 from lightning import LightningDataModule
+from typing import List
 
 
-class NewsDataModule(LightningDataModule):
+class DynamicBatchModule(LightningDataModule):
+    def __init__(
+            self,
+            batch_size: List[int] | int,
+            effective_batch_size: int | None,
+        ):
+        super().__init__()
+        if isinstance(batch_size, int):
+            batch_size = [batch_size]
+        self.batch_sizes = batch_size
+        self.effective_batch_size = effective_batch_size
+        self.batch_size = batch_size[0]
+
+
+    def adjust_grad_accum(self):
+        if self.effective_batch_size is None:
+            return
+
+
+        devices = self.trainer.num_devices * self.trainer.num_nodes
+        new_accumulated_batches = self.effective_batch_size // (self.batch_size * devices)
+        if new_accumulated_batches == 0:
+            new_accumulated_batches = 1
+
+        if new_accumulated_batches * (self.batch_size * devices) != self.effective_batch_size:
+            raise ValueError("Inconsistent effective batch size")
+
+        self.trainer.accumulate_grad_batches = new_accumulated_batches
+        print(f"Next accumulated batches: {new_accumulated_batches}")
+
+
+    def adjust_batch_size(self):
+        if self.trainer is None:
+            return
+        
+        new_batch_size = self.batch_sizes[self.trainer.current_epoch] if self.trainer.current_epoch < len(self.batch_sizes) else self.batch_sizes[-1]
+        if self.batch_size != new_batch_size:
+            self.batch_size = new_batch_size
+
+        # If we won't have new batch size, we don't need to reload the dataloader
+        if self.trainer.current_epoch + 1 < len(self.batch_sizes):
+            self.trainer.reload_dataloaders_every_n_epochs = 1
+        else:
+            print("Won't reload dataloaders")
+            self.trainer.reload_dataloaders_every_n_epochs = 0
+
+        print(f"Next batch size: {self.batch_size}")
+
+    def _train_dataloader(self) -> DataLoader:
+        raise NotImplementedError()
+
+    def _val_dataloader(self) -> DataLoader:
+        raise NotImplementedError()
+    
+    def _test_dataloader(self) -> DataLoader:
+        raise NotImplementedError()
+
+    def train_dataloader(self):
+        self.adjust_batch_size()
+        self.adjust_grad_accum()
+        return self._train_dataloader()
+    
+    def val_dataloader(self):
+        self.adjust_batch_size()
+        self.adjust_grad_accum()
+        return self._val_dataloader()
+    
+    def test_dataloader(self):
+        self.adjust_batch_size()
+        self.adjust_grad_accum()
+        return self._test_dataloader()
+
+
+class NewsDataModule(DynamicBatchModule):
     def __init__(
         self,
         column,
         num_classes,
         tokenizer,
         cache_dir,
+        effective_batch_size: int | None,
         max_length=512,
-        batch_size=12,
+        batch_size: List | int = 12,
         pin_memory=False,
         limit=None,
-        pad_mode=False,
         num_proc: int=4,
+        pad_mode=True,
         trunc_type="start",
     ):
-        super().__init__()
-        self.batch_size = batch_size
+        super().__init__(batch_size, effective_batch_size)
         self.num_proc = num_proc
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
         self.max_length = max_length
@@ -36,54 +110,67 @@ class NewsDataModule(LightningDataModule):
         self.trunc_type = trunc_type
         self.pin_memory = pin_memory
 
-        data_collator_pad = True if (pad_mode==False or pad_mode==True) else pad_mode
         self.data_collator = DataCollatorWithPadding(
-            tokenizer=self.tokenizer, padding=data_collator_pad, max_length=max_length
+            tokenizer=self.tokenizer, padding=pad_mode, max_length=max_length
         )
         self.cache_dir = Path(cache_dir)
         self.limit = limit
         self.pad_mode = pad_mode
         self.num_classes = num_classes
 
+    def path(self, split):
+        return self.cache_dir / self.column / str(self.max_length) / self.trunc_type / split
+
+
+    def __truncate_tokenized(self, tokenized):
+        if self.trunc_type == "start":
+            truncated = tokenized[:self.max_length]
+        elif self.trunc_type == "end":
+            truncated = tokenized[-self.max_length:]
+        # CLS and SEP tokens
+        truncated[0] = tokenized[0]
+        truncated[-1] = tokenized[-1]
+        return truncated
+
+    def tokenize(self, examples):
+        content = examples["content"]
+        tokenized = self.tokenizer(content, truncation=False, padding=False)
+        for key in ["input_ids", "attention_mask"]:
+            tokenized[key] = [self.__truncate_tokenized(x) for x in tokenized[key]]
+        return tokenized
 
     def prepare_split(self, split):
-        split_cache_dir = self.cache_dir / self.column / str(self.max_length) / split
-        if split_cache_dir.exists():
+        if self.path(split).exists():
             # No cache invalidation but don't wanna bother
-
             return
 
 
         dataset = load_dataset(str("hynky/czech_news_dataset"), split=split)
         if self.limit:
             dataset = dataset.select(range(self.limit))
-
         dataset = dataset.rename_column(self.column, "labels")
+        dataset = dataset.remove_columns(set(dataset.column_names) - {"content", "labels"})
         dataset = dataset.map(
-            lambda batch: self.tokenizer(
-                batch["content"], truncation=True, padding=self.pad_mode , max_length=self.max_length
-            ),
-            batched=True, keep_in_memory=True
+            self.tokenize,
+            batched=True
         )
-        cols = {"labels", "attention_mask", "input_ids"}
         # Remove "Nones"
-        dataset = dataset.filter(lambda batch: [x != 0 for x in batch["labels"]], batched=True, num_proc=self.num_proc, keep_in_memory=True)
+        dataset = dataset.filter(lambda batch: [x != 0 for x in batch["labels"]], batched=True, keep_in_memory=True)
         # Map to 0-indexed labels
         dataset = dataset.map(
             lambda batch: {"labels": [x - 1 for x in batch["labels"]]},
-            num_proc=self.num_proc,
+            num_proc=4,
             batched=True,
             keep_in_memory=True,
         )
-        dataset = dataset.remove_columns(set(dataset.column_names) - cols)
         dataset.set_format("pt", columns=["input_ids", "attention_mask", "labels"])
 
         print("Saving")
-        dataset.save_to_disk(str(split_cache_dir), num_proc=self.num_proc)
+        dataset.save_to_disk(self.path(split), num_proc=self.num_proc)
 
     def load_split(self, split):
         dataset = load_from_disk(
-            self.cache_dir / self.column / str(self.max_length) / split
+            self.path(split),
         )
         return dataset
 
@@ -109,13 +196,13 @@ class NewsDataModule(LightningDataModule):
             shuffle=shuffle,
         )
 
-    def train_dataloader(self):
+    def _train_dataloader(self):
         return self.create_dataloader(self.train_dataset, shuffle=True)
 
-    def val_dataloader(self):
-        return self.create_dataloader(self.val_dataset)
+    def _val_dataloader(self):
+        return self.create_dataloader(self.val_dataset, shuffle=True)
 
-    def test_dataloader(self):
+    def _test_dataloader(self):
         return self.create_dataloader(self.test_dataset)
 
 
@@ -251,20 +338,20 @@ class NewsTfidfDataModule(LightningDataModule):
 
 
 
-class NewsDataModuleForLM(LightningDataModule):
+class NewsDataModuleForLM(DynamicBatchModule):
     def __init__(
         self,
         tokenizer,
         cache_dir,
+        batch_size: List[int] | int,
+        effective_batch_size: int | None,
         max_length=512,
         mlm=0.15,
-        batch_size=12,
         pin_memory=True,
         limit=None,
         num_proc: int=4,
     ):
-        super().__init__()
-        self.batch_size = batch_size
+        super().__init__(batch_size, effective_batch_size)
         self.num_proc = num_proc
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
         self.max_length = max_length
@@ -289,12 +376,15 @@ class NewsDataModuleForLM(LightningDataModule):
             k: [t[i : i + self.max_length] for i in range(0, total_length, self.max_length)]
             for k, t in concatenated_examples.items()
         }
+
+
         result["labels"] = result["input_ids"].copy()
         return result
 
 
     def prepare_split(self, split):
-        split_cache_dir = self.cache_dir / "LM" / str(self.max_length) / split
+        name = "LM"
+        split_cache_dir = self.cache_dir / name / str(self.max_length) / split
         if split_cache_dir.exists():
             # No cache invalidation but don't wanna bother
             return
@@ -344,11 +434,11 @@ class NewsDataModuleForLM(LightningDataModule):
             shuffle=False
         )
 
-    def train_dataloader(self):
+    def _train_dataloader(self):
         return self.create_dataloader(self.train_dataset)
 
-    def val_dataloader(self):
+    def _val_dataloader(self):
         return self.create_dataloader(self.val_dataset)
 
-    def test_dataloader(self):
+    def _test_dataloader(self):
         return self.create_dataloader(self.test_dataset)

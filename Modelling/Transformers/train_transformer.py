@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from pathlib import Path
 import hydra
 from lightning import Trainer, seed_everything
 from omegaconf import DictConfig, OmegaConf
@@ -6,7 +7,7 @@ import wandb
 from lightning.pytorch.tuner.tuning import Tuner
 from hydra.utils import instantiate
 from lightning.pytorch.callbacks import ModelCheckpoint,EarlyStopping, Timer, LearningRateMonitor
-from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
 
 
 def fit(trainer: Trainer, model, datamodule, ckpt_path=None):
@@ -32,10 +33,18 @@ def tune(trainer: Trainer, model, datamodule):
     print(f"Found lr: {lr_finder.suggestion()}")
 
 
-    
+def set_effective_batch_size(needed_size, devices, batch_size):
+    acc_batches = needed_size // (devices * batch_size)
+    if acc_batches * (devices * batch_size) != needed_size:
+        raise ValueError(
+            f"Effective batch size should be divisible by {devices * batch_size}"
+        )
+    return acc_batches
+
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
+    checkpoint_path = cfg.run.chckpt_path if "chckpt_path" in cfg.run else None
     if "logger" in cfg:
         project_name = f"{cfg.task.name.capitalize()}-Deep-Learning"
         if "debug" in cfg.run:
@@ -44,10 +53,24 @@ def main(cfg: DictConfig) -> None:
     else:
         logger = TensorBoardLogger("tb_logs", name=cfg.task.name)
 
+    if isinstance(logger, WandbLogger) and checkpoint_path in ["best_k", "last", "best"]:
+        experiment = logger.experiment
+        reference = f"{experiment.entity}/{experiment.project}/model-{experiment.id}:{checkpoint_path}"
+        artifact = logger.use_artifact(reference)
+        artifact_dir = artifact.download()
+        checkpoint_path = Path(artifact_dir) / "model.ckpt"
+    
+
+
+
+
+
+
+
     
 
     datamodule_kwargs = OmegaConf.to_container(cfg.task.settings) if "settings" in cfg.task else {}
-    datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, pin_memory=cfg.accelerator.pin_memory ,**datamodule_kwargs)
+    datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, pin_memory=cfg.accelerator.pin_memory,effective_batch_size=cfg.effective_batch_size ,**datamodule_kwargs)
     optimizer = instantiate(cfg.optimizer, _partial_=True) if "optimizer" in cfg else None
     scheduler = instantiate(cfg.scheduler, _partial_=True) if "scheduler" in cfg else None
     
@@ -64,6 +87,7 @@ def main(cfg: DictConfig) -> None:
 
     model = instantiate(cfg.model.model, **model_kwargs)
 
+<<<<<<< HEAD
     callbacks = [
         ModelCheckpoint(
             monitor=cfg.model.metrics.monitor,
@@ -86,6 +110,33 @@ def main(cfg: DictConfig) -> None:
         ),
         LearningRateMonitor(logging_interval="step")
     ]
+=======
+    callbacks = []
+    if cfg.run.mode == "fit":
+        callbacks = [
+            ModelCheckpoint(
+                monitor=cfg.model.metrics.monitor,
+                save_top_k=1,
+                verbose=True,
+                mode=cfg.model.metrics.mode,
+            ),
+            ModelCheckpoint(
+                monitor=None,
+                verbose=True,
+                save_on_train_epoch_end=True,
+            ),
+            EarlyStopping(
+                monitor=cfg.model.metrics.monitor,
+                patience=cfg.model.metrics.patience,
+                verbose=True,
+                
+                mode=cfg.model.metrics.mode,
+            ),
+            LearningRateMonitor(logging_interval="step")
+        ]
+
+    
+>>>>>>> 778628c707c46aa4d6c3650c8f505f4e86ccdbae
     additional_callbacks = instantiate(cfg.callbacks)
 
 
@@ -106,20 +157,18 @@ def main(cfg: DictConfig) -> None:
         accelerator=cfg.accelerator.accelerator,
         reload_dataloaders_every_n_epochs=1
     )
-    print(cfg.run.mode)
-
 
     if cfg.run.mode == "tune":
         tune(trainer, model, datamodule)
 
     if cfg.run.mode == "fit":
-        fit(trainer, model, datamodule, ckpt_path=cfg.run.chckpt_path)
+        fit(trainer, model, datamodule, ckpt_path=checkpoint_path)
 
     if cfg.run.mode == "validate":
-        validate(trainer, model, datamodule, ckpt_path=cfg.run.chckpt_path)
+        validate(trainer, model, datamodule, ckpt_path=checkpoint_path)
 
     if cfg.run.mode == "test":
-        test(trainer, model, datamodule, ckpt_path=cfg.run.chckpt_path)
+        test(trainer, model, datamodule, ckpt_path=checkpoint_path)
 
 
 if __name__ == "__main__":

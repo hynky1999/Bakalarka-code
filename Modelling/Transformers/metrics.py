@@ -13,6 +13,20 @@ class MetricMetadata:
     step: bool
     epoch: bool
 
+
+class PerplexityFromLossMetric(Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state("crossentropy", default=torch.tensor(0, dtype=torch.float), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, loss):
+        self.crossentropy += loss
+        self.total += loss.numel()
+
+    def compute(self):
+        return torch.exp(self.crossentropy/self.total)
+
 # Would be nice if it would be real metric but I would have to make an effort to ensure synchronizaiton
 class MetricWithMetadata(Metric):
     def __init__(self, metric, metadata: MetricMetadata, **kwargs):
@@ -64,12 +78,13 @@ metric_defs = {
     "f1_micro": (F1Score, {"task": "multiclass", "average": "micro"}),
     "precision_macro": (Precision, {"task": "multiclass", "average": "macro"}),
     "precision_micro": (Precision, {"task": "multiclass", "average": "micro"}),
+    "perplexity": (PerplexityFromLossMetric, {}),
     "confusion_matrix": (ConfusionMatrix, {"task": "multiclass"}),
 }
 
-def create_metric(metric_name, num_classes , epoch: bool, step: bool):
+def create_metric(metric_name, epoch: bool=False, step: bool=False, **kwargs):
     metric_def = metric_defs[metric_name]
-    metric = metric_def[0](**metric_def[1], num_classes=num_classes)
+    metric = metric_def[0](**metric_def[1], **kwargs)
     metadata = MetricMetadata(metric_name, epoch=epoch, step=step)
     return MetricWithMetadata(metric, metadata)
 
@@ -95,45 +110,14 @@ def prepare_confussion_matrix_for_logging(confusion_matrix):
     return data, ["Actual", "Predicted", "Count"]
 
 
-def log_metrics(model, predicted_labels, labels, split):
+def log_metrics(model, split, **kwargs):
         for metric in model.metrics[split + "_metrics"]:
-            if metric.metadata.step:
-                step_value = metric(predicted_labels, labels)
-                model.log(
-                    f"{split}/{metric.metadata.readable_name}_step",
-                    step_value,
-                    logger=True,
-                )
-            else:
-                metric.update(predicted_labels, labels)
-
-def reset_and_log_metrics(model, split):
-    for metric in model.metrics[split + "_metrics"]:
-        metric: MetricWithMetadata
-        if metric.metadata.epoch:
-            # Kinda monkey patched
-            if metric.real_type == MulticlassConfusionMatrix:
-                cm = metric.compute()
-                log_confussion_matrix(model, cm, split)
-            else:
-                model.log(
-                    f"{split}/{metric.metadata.readable_name}_epoch",
-                    metric.compute(),
-                    logger=True,
-                )
-        metric.reset()
-
-
-class PerplexityFromLossMetric(Metric):
-    def __init__(self):
-        super().__init__()
-        self.add_state("crossentropy", default=torch.tensor(0, dtype=torch.float), dist_reduce_fx="sum")
-        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
-
-    def update(self, loss):
-        self.crossentropy += loss
-        self.total += loss.numel()
-
-    def compute(self):
-        return torch.exp(self.crossentropy/self.total)
+            metric.update(**kwargs)
+            model.log(
+                f"{split}/{metric.metadata.readable_name}",
+                metric,
+                on_step=metric.metadata.step,
+                on_epoch=metric.metadata.epoch,
+                logger=True,
+            )
     

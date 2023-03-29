@@ -1,3 +1,4 @@
 strategy: auto
 accelerator: gpu
 devices: 1
+pin_memory: true

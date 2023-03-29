@@ -1,5 +1,7 @@
 # @package _global_
-batch_size: 8
+batch_size: 64
+# Enforce usage of effective batch size even in debug
+effective_batch_size: 192
 
 optimizer:
   lr: 2e-5
@@ -7,16 +9,16 @@ optimizer:
 
 callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
-    unfreeze_per_epoch: 2
-    # 1/0.9 = 1.11
-    div_lr: 1.1112
+    unfreeze_per_epoch: 4
 
 
+data:
+  pad_mode: "max_length"
 
 defaults:
   - override /data: news_tokenized
   - override /scheduler: linear_for_freezing
   - override /optimizer: adamW
-  - override /model: hyneczech_class
+  - override /model: robeczech_class
 
-max_epochs: 6
+max_epochs: 1
