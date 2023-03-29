@@ -60,8 +60,6 @@ class ClassificationModel(BaseModel):
                 "test_metrics": ModuleList(create_test_metrics(num_classes)),
             }
         )
-        self.optim = optimizer
-        self.scheduler = scheduler
 
     def training_step(self, batch, batch_idx):
         output = self(**batch)
@@ -78,9 +76,8 @@ class ClassificationModel(BaseModel):
         predicted_labels = torch.argmax(output.logits, dim=1)
         log_metrics(self, preds=predicted_labels, target=labels, split="val")
         self.log(
-            "val/loss_epoch", output.loss, logger=True, on_epoch=True, on_step=False
+            "val/loss_epoch", output.loss, logger=True, on_epoch=True, on_step=True
         )
-        return output.loss
 
 
     def test_step(self, batch, batch_idx):
@@ -89,9 +86,8 @@ class ClassificationModel(BaseModel):
         predicted_labels = torch.argmax(output.logits, dim=1)
         log_metrics(self, preds=predicted_labels, target=labels, split="test")
         self.log(
-            "test/loss_epoch", output.loss, logger=True, on_epoch=True, on_step=False
+            "test/loss_epoch", output.loss, logger=True, on_epoch=True, on_step=True
         )
-        return output.loss
 
     def forward(self) -> LogitsOutput:
         raise NotImplementedError
@@ -106,6 +102,7 @@ class FineTunedClassifier(ClassificationModel):
         optimizer,
     ):
         super().__init__(num_classes, optimizer, scheduler)
+        # Allows us to load the model from a checkpoint
         self.model = self.get_model(pretrained_model, num_classes)
         self.save_hyperparameters(ignore=["optimizer", "scheduler"])
 
@@ -137,7 +134,8 @@ class LMModel(BaseModel):
     def __init__(self, pretrained_model, optimizer, scheduler):
         super().__init__(optimizer, scheduler)
         self.save_hyperparameters(ignore=["optimizer", "scheduler"])
-        self.model = AutoModelForMaskedLM.from_pretrained(pretrained_model)
+        if not hasattr(self, "model"):
+            self.model = AutoModelForMaskedLM.from_pretrained(pretrained_model)
         self.metrics = ModuleDict(
             {
                 "train_metrics": ModuleList([create_metric("perplexity", step=True)]),

@@ -1,0 +1,10 @@
+model:
+  _target_: models.FineTunedClassifier
+  pretrained_model: "Seznam/small-e-czech"
+
+metrics:
+  patience: 5
+  monitor: val/f1_macro
+  mode: max
+
+
