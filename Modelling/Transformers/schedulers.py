@@ -43,9 +43,12 @@ def get_slated_lambda(
 def get_linear_schedule_for_discriminiative_lr(
     optimizer: torch.optim.Optimizer,
     trainer: Trainer,
-    num_warmup_steps: float,
     total_unfreezes,
     groups_per_unfreeze: int,
+    num_warmup_steps_classifier: float,
+    min_lr_classifier: float,
+    num_warmup_steps_backbone: float,
+    min_lr_backbone: float,
 ):
 
     assert trainer.max_epochs != None and trainer.estimated_stepping_batches != None
@@ -54,14 +57,12 @@ def get_linear_schedule_for_discriminiative_lr(
         trainer.num_training_batches / trainer.accumulate_grad_batches
     )
     training_steps = steps_per_epoch * trainer.max_epochs
-    # Multiply by two because of decay and no decay
-
     # Add classifier
     pg_lambdas = [
         get_slated_lambda(
-            int(num_warmup_steps * training_steps),
+            int(num_warmup_steps_classifier * training_steps),
             training_steps,
-            0.0,
+            min_lr_classifier,
             offset=0,
         )
         for _ in range(groups_per_unfreeze)
@@ -72,9 +73,9 @@ def get_linear_schedule_for_discriminiative_lr(
         pg_lambdas.extend(
             [
                 get_slated_lambda(
-                    int(num_warmup_steps * remaining_steps),
+                    int(num_warmup_steps_backbone * remaining_steps),
                     remaining_steps,
-                    0.0,
+                    min_lr_backbone,
                     offset=offset,
                 )
                 for _ in range(groups_per_unfreeze)

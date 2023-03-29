@@ -20,4 +20,4 @@ defaults:
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 6
+max_epochs: 4

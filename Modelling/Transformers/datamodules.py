@@ -110,36 +110,50 @@ class NewsDataModule(DynamicBatchModule):
         self.trunc_type = trunc_type
         self.pin_memory = pin_memory
 
-        data_collator_pad = True if (pad_mode==False or pad_mode==True) else pad_mode
         self.data_collator = DataCollatorWithPadding(
-            tokenizer=self.tokenizer, padding=data_collator_pad, max_length=max_length
+            tokenizer=self.tokenizer, padding=pad_mode, max_length=max_length
         )
         self.cache_dir = Path(cache_dir)
         self.limit = limit
         self.pad_mode = pad_mode
         self.num_classes = num_classes
 
+    def path(self, split):
+        return self.cache_dir / self.column / str(self.max_length) / self.trunc_type / split
+
+
+    def __truncate_tokenized(self, tokenized):
+        if self.trunc_type == "start":
+            truncated = tokenized[:self.max_length]
+        elif self.trunc_type == "end":
+            truncated = tokenized[-self.max_length:]
+        # CLS and SEP tokens
+        truncated[0] = tokenized[0]
+        truncated[-1] = tokenized[-1]
+        return truncated
+
+    def tokenize(self, examples):
+        content = examples["content"]
+        tokenized = self.tokenizer(content, truncation=False, padding=False)
+        for key in ["input_ids", "attention_mask"]:
+            tokenized[key] = [self.__truncate_tokenized(x) for x in tokenized[key]]
+        return tokenized
 
     def prepare_split(self, split):
-        split_cache_dir = self.cache_dir / self.column / str(self.max_length) / split
-        if split_cache_dir.exists():
+        if self.path(split).exists():
             # No cache invalidation but don't wanna bother
-
             return
 
 
         dataset = load_dataset(str("hynky/czech_news_dataset"), split=split)
         if self.limit:
             dataset = dataset.select(range(self.limit))
-
         dataset = dataset.rename_column(self.column, "labels")
+        dataset = dataset.remove_columns(set(dataset.column_names) - {"content", "labels"})
         dataset = dataset.map(
-            lambda batch: self.tokenizer(
-                batch["content"], truncation=True, padding=self.pad_mode , max_length=self.max_length
-            ),
-            batched=True, keep_in_memory=True
+            self.tokenize,
+            batched=True
         )
-        cols = {"labels", "attention_mask", "input_ids"}
         # Remove "Nones"
         dataset = dataset.filter(lambda batch: [x != 0 for x in batch["labels"]], batched=True, keep_in_memory=True)
         # Map to 0-indexed labels
@@ -149,15 +163,14 @@ class NewsDataModule(DynamicBatchModule):
             batched=True,
             keep_in_memory=True,
         )
-        dataset = dataset.remove_columns(set(dataset.column_names) - cols)
         dataset.set_format("pt", columns=["input_ids", "attention_mask", "labels"])
 
         print("Saving")
-        dataset.save_to_disk(str(split_cache_dir), num_proc=self.num_proc)
+        dataset.save_to_disk(self.path(split), num_proc=self.num_proc)
 
     def load_split(self, split):
         dataset = load_from_disk(
-            self.cache_dir / self.column / str(self.max_length) / split
+            self.path(split),
         )
         return dataset
 
@@ -187,7 +200,7 @@ class NewsDataModule(DynamicBatchModule):
         return self.create_dataloader(self.train_dataset, shuffle=True)
 
     def _val_dataloader(self):
-        return self.create_dataloader(self.val_dataset)
+        return self.create_dataloader(self.val_dataset, shuffle=True)
 
     def _test_dataloader(self):
         return self.create_dataloader(self.test_dataset)
@@ -363,12 +376,15 @@ class NewsDataModuleForLM(DynamicBatchModule):
             k: [t[i : i + self.max_length] for i in range(0, total_length, self.max_length)]
             for k, t in concatenated_examples.items()
         }
+
+
         result["labels"] = result["input_ids"].copy()
         return result
 
 
     def prepare_split(self, split):
-        split_cache_dir = self.cache_dir / "LM" / str(self.max_length) / split
+        name = "LM"
+        split_cache_dir = self.cache_dir / name / str(self.max_length) / split
         if split_cache_dir.exists():
             # No cache invalidation but don't wanna bother
             return

@@ -2,7 +2,7 @@
 
 # Can't run at start 64 as wouldn't work with 2 GPUs
 # due to effective batch size
-batch_size: [48, 32, 24, 16, 12, 12]
+batch_size: 8
 
 optimizer:
   lr: 2e-5
@@ -10,9 +10,12 @@ optimizer:
 
 callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
-    unfreeze_per_epoch: 2
-    # 1/0.9 = 1.11
-    div_lr: 1.1112
+    unfreeze_per_epoch: 12
+
+
+data:
+  trunc_type: "end"
+
 
 
 defaults:

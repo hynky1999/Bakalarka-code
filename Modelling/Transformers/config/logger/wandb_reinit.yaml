@@ -1,5 +1,6 @@
 _target_: "lightning.pytorch.loggers.wandb.WandbLogger"
 _partial_: True
 save_dir: "/home/kydliceh/Articles_Analysis/Modelling/Transformers/projects"
-log_model: true
-resume: "never"
+log_model: True
+resume: "must"
+id: ???

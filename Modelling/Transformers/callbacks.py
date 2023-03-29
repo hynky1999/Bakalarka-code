@@ -13,12 +13,12 @@ def count_params(opt: Optimizer, grad: bool = True):
 
 
 class GradualUnfreezingCallback(BaseFinetuning):
-    def __init__(self, unfreeze_per_epoch: int, div_lr: float = 2.6, min_unfreeze_layer: int = 0, remove_batches: int = 0):
+    def __init__(self, unfreeze_per_epoch: int, div_lr: float = 2.6, min_unfreeze_layer: int = 0, classifier_lr=None):
         super().__init__()
         self.unfreeze_per_epoch = unfreeze_per_epoch
-        self.remove_batches = remove_batches
-        self.last_unfrozen_layer = 0
         self.total_layers = 0
+        self.start_lr = None
+        self.start_decay = None
         self.div_lr = div_lr
         self.min_unfreeze_layer = min_unfreeze_layer
 
@@ -28,35 +28,39 @@ class GradualUnfreezingCallback(BaseFinetuning):
         # Classifier unfreeze
         self.make_trainable(model.model.classifier)
         self.total_layers = len(model.model.roberta.encoder.layer)
-        self.last_unfrozen_layer = self.total_layers
 
     def finetune_function(
         self, model: LightningModule, epoch: int, optimizer: Optimizer
     ):
 
+        r_unfreeze_l = self.total_layers - epoch * self.unfreeze_per_epoch
+        l_unfreeze_l = max(self.min_unfreeze_layer, r_unfreeze_l - self.unfreeze_per_epoch)
         # Nothing to unfreeze
-        if self.last_unfrozen_layer <= self.min_unfreeze_layer:
+        if r_unfreeze_l <= self.min_unfreeze_layer:
             return
 
 
-        old_last_unfrozen_layer = self.last_unfrozen_layer
-        self.last_unfrozen_layer = max(self.min_unfreeze_layer, self.last_unfrozen_layer - self.unfreeze_per_epoch)
-
-        
         # Optims should have this
-        lr = optimizer.param_groups[-1]["initial_lr"]
-        decay = optimizer.param_groups[-1]["weight_decay"]
+        lr = self.start_lr
+        decay = self.start_decay
+        if lr is None:
+            lr = optimizer.param_groups[0]["initial_lr"]
+        if decay is None:
+            decay = optimizer.param_groups[0]["weight_decay"]
 
-        if old_last_unfrozen_layer != self.total_layers:
-            lr /= self.div_lr
+
+        # If not unfreeze divide lr
+        if r_unfreeze_l != self.total_layers:
+            lr = lr / self.div_lr**epoch
 
 
         new_layers = model.model.roberta.encoder.layer[
-            self.last_unfrozen_layer:old_last_unfrozen_layer
+            l_unfreeze_l:r_unfreeze_l
         ]
-        print(f"Unfreezing {self.last_unfrozen_layer}-{old_last_unfrozen_layer} layers with lr {lr} and decay {decay}")
+        print(f"Unfreezing {l_unfreeze_l}-{r_unfreeze_l} layers with lr {lr} and decay {decay}")
         self.make_trainable(new_layers)
         param_groups = get_no_decay_groups(new_layers, lr, decay, ["bias", "LayerNorm.weight"])
+        print(len(optimizer.param_groups))
         for param_group in param_groups:
             optimizer.add_param_group(param_group)
         print(f"Total trainable params: {count_params(optimizer)}")
