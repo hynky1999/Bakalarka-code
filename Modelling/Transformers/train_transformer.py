@@ -67,9 +67,16 @@ def main(cfg: DictConfig) -> None:
     callbacks = [
         ModelCheckpoint(
             monitor=cfg.model.metrics.monitor,
-            save_top_k=1,
+            save_top_k=2,
             verbose=True,
             mode=cfg.model.metrics.mode,
+        ),
+        # For resuming
+        ModelCheckpoint(
+            monitor=None,
+            save_top_k=1,
+            verbose=True,
+            save_on_train_epoch_end=True,
         ),
         EarlyStopping(
             monitor=cfg.model.metrics.monitor,
@@ -97,6 +104,7 @@ def main(cfg: DictConfig) -> None:
         limit_test_batches=cfg.limit_test_batches,
         fast_dev_run=cfg.fast_dev_run,
         accelerator=cfg.accelerator.accelerator,
+        reload_dataloaders_every_n_epochs=1
     )
     print(cfg.run.mode)
 
