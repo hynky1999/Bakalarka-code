@@ -3,12 +3,17 @@ batch_size: 64
 
 optimizer:
   weight_decay: 0
+  lr: 1e-3
+scheduler:
+  num_warmup_steps_classifier: 0
+  total_unfreezes: 0
+
+
 
 callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
     unfreeze_per_epoch: 0
     min_unfreeze_layer: 12
-    classsifier_lr: 1e-3
 
 defaults:
   - override /data: news_tokenized

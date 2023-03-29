@@ -59,15 +59,6 @@ def main(cfg: DictConfig) -> None:
         artifact = logger.use_artifact(reference)
         artifact_dir = artifact.download()
         checkpoint_path = Path(artifact_dir) / "model.ckpt"
-    
-
-
-
-
-
-
-
-    
 
     datamodule_kwargs = OmegaConf.to_container(cfg.task.settings) if "settings" in cfg.task else {}
     datamodule = instantiate(cfg.data, num_proc=cfg.num_proc, batch_size=cfg.batch_size, pin_memory=cfg.accelerator.pin_memory,effective_batch_size=cfg.effective_batch_size ,**datamodule_kwargs)
@@ -87,30 +78,6 @@ def main(cfg: DictConfig) -> None:
 
     model = instantiate(cfg.model.model, **model_kwargs)
 
-<<<<<<< HEAD
-    callbacks = [
-        ModelCheckpoint(
-            monitor=cfg.model.metrics.monitor,
-            save_top_k=2,
-            verbose=True,
-            mode=cfg.model.metrics.mode,
-        ),
-        # For resuming
-        ModelCheckpoint(
-            monitor=None,
-            save_top_k=1,
-            verbose=True,
-            save_on_train_epoch_end=True,
-        ),
-        EarlyStopping(
-            monitor=cfg.model.metrics.monitor,
-            patience=cfg.model.metrics.patience,
-            verbose=True,
-            mode=cfg.model.metrics.mode,
-        ),
-        LearningRateMonitor(logging_interval="step")
-    ]
-=======
     callbacks = []
     if cfg.run.mode == "fit":
         callbacks = [
@@ -136,7 +103,6 @@ def main(cfg: DictConfig) -> None:
         ]
 
     
->>>>>>> 778628c707c46aa4d6c3650c8f505f4e86ccdbae
     additional_callbacks = instantiate(cfg.callbacks)
 
 
