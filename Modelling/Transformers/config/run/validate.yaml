@@ -1,0 +1,2 @@
+mode: validate
+limit_val_batches: 1.0

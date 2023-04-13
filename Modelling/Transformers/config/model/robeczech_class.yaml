@@ -3,8 +3,8 @@ model:
   pretrained_model: "ufal/robeczech-base"
 
 metrics:
-  patience: 5
-  monitor: val/f1_macro
+  patience: 10
+  monitor: val/f1_macro_epoch
   mode: max
 
 

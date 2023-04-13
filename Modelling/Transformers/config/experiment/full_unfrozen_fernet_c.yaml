@@ -1,0 +1,22 @@
+# @package _global_
+
+# Can't run at start 64 as wouldn't work with 2 GPUs
+# due to effective batch size
+batch_size: 8
+
+optimizer:
+  lr: 3e-5
+  weight_decay: 0
+
+callbacks:
+  - _target_: callbacks.GradualUnfreezingCallback
+    unfreeze_per_epoch: 12
+
+
+defaults:
+  - override /data: news_tokenized_fernet_c
+  - override /scheduler: linear_for_freezing
+  - override /optimizer: adamW
+  - override /model: fernet_c_class
+
+max_epochs: 2

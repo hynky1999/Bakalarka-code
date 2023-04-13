@@ -1,5 +1,6 @@
 # @package _global_
-batch_size: 64
+batch_size: 128
+effective_batch_size: 128
 
 optimizer:
   weight_decay: 0
@@ -7,6 +8,7 @@ optimizer:
 scheduler:
   num_warmup_steps_classifier: 0
   total_unfreezes: 0
+  min_lr_classifier: 1e-5
 
 
 
@@ -21,4 +23,7 @@ defaults:
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 4
+max_epochs: 1
+val_check_interval: 0.05
+limit_val_batches: 0.0625
+limit_train_batches: 0.5

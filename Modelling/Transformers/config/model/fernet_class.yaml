@@ -1,0 +1,10 @@
+model:
+  _target_: models.FineTunedClassifier
+  pretrained_model: "fav-kky/FERNET-News"
+
+metrics:
+  patience: 10
+  monitor: val/f1_macro_epoch
+  mode: max
+
+

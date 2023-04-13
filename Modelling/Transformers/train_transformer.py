@@ -8,6 +8,9 @@ from lightning.pytorch.tuner.tuning import Tuner
 from hydra.utils import instantiate
 from lightning.pytorch.callbacks import ModelCheckpoint,EarlyStopping, Timer, LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
+from hydra.core.hydra_config import HydraConfig
+import pickle
+
 
 
 def fit(trainer: Trainer, model, datamodule, ckpt_path=None):
@@ -20,6 +23,9 @@ def validate(trainer: Trainer, model, datamodule, ckpt_path=None):
 
 def test(trainer, model, datamodule, ckpt_path=None):
     trainer.test(model, datamodule, ckpt_path=ckpt_path)
+
+def predict(trainer, model, datamodule, ckpt_path=None):
+    return trainer.predict(model, datamodule, ckpt_path=ckpt_path)
 
 
 def tune(trainer: Trainer, model, datamodule):
@@ -41,19 +47,45 @@ def set_effective_batch_size(needed_size, devices, batch_size):
         )
     return acc_batches
 
+
+def setup_wandb(cfg: DictConfig):
+    project_name = f"{cfg.task.name.capitalize()}-Deep-Learning"
+    run_id = None
+    if "debug" in cfg.run:
+        project_name = f"Debug"
+
+    hydra_cfg = HydraConfig.get()
+
+    if cfg.id == "auto" and "experiment" in hydra_cfg.runtime.choices and run_id is None:
+        run_id = hydra_cfg.runtime.choices["experiment"]
+        print("Running experiment: ", run_id)
+
+    elif cfg.id == None:
+        run_id = wandb.util.generate_id()
+
+    else:
+        run_id = cfg.id
+
+
+    wandb_config = None
+    if cfg.run.mode == "fit":
+        wandb_config = vars(cfg)
+
+    logger = instantiate(cfg.logger,  project=project_name)(config=wandb_config, id=run_id)
+    return logger
+
+
 @hydra.main(config_path="config", config_name="config", version_base="1.3")
 def main(cfg: DictConfig) -> None:
+
     seed_everything(cfg.seed)
     checkpoint_path = cfg.run.chckpt_path if "chckpt_path" in cfg.run else None
     if "logger" in cfg:
-        project_name = f"{cfg.task.name.capitalize()}-Deep-Learning"
-        if "debug" in cfg.run:
-            project_name = f"Debug"
-        logger = instantiate(cfg.logger, project=project_name)(config=vars(cfg))
+        logger = setup_wandb(cfg)
     else:
         logger = TensorBoardLogger("tb_logs", name=cfg.task.name)
 
-    if isinstance(logger, WandbLogger) and checkpoint_path in ["best_k", "last", "best"]:
+    if isinstance(logger, WandbLogger) and checkpoint_path in ["best_k", "latest", "best"]:
         experiment = logger.experiment
         reference = f"{experiment.entity}/{experiment.project}/model-{experiment.id}:{checkpoint_path}"
         artifact = logger.use_artifact(reference)
@@ -121,6 +153,7 @@ def main(cfg: DictConfig) -> None:
         limit_test_batches=cfg.limit_test_batches,
         fast_dev_run=cfg.fast_dev_run,
         accelerator=cfg.accelerator.accelerator,
+        max_steps=cfg.max_steps,
         reload_dataloaders_every_n_epochs=1
     )
 
@@ -135,6 +168,19 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.run.mode == "test":
         test(trainer, model, datamodule, ckpt_path=checkpoint_path)
+
+    if cfg.run.mode == "test and validate":
+        validate(trainer, model, datamodule, ckpt_path=checkpoint_path)
+        test(trainer, model, datamodule, ckpt_path=checkpoint_path)
+
+    if cfg.run.mode == "predict":
+        predicted = predict(trainer, model, datamodule
+                            , ckpt_path=checkpoint_path)
+        # Save predictions
+        outfolder = Path(cfg.run.out_folder)
+        name = outfolder / f"{cfg.task.name}_predictions"
+        pickle.dump(predicted, open(f"{name}.pkl", "wb"))
+        
 
 
 if __name__ == "__main__":

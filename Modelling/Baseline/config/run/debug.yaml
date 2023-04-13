@@ -1,13 +1,5 @@
 # @package _global_
 run:
-  train:
-    epoch: 1000
-    batch_size: 1000
-    log_steps: null
-
-  test: True
-  eval: True
-
-defaults:
-  - _self_
-  - override /data: debug
+  test: False
+  train: True
+  load_model: null

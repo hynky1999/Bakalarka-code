@@ -5,18 +5,15 @@
 batch_size: 8
 
 optimizer:
-  lr: 2e-5
+  lr: 3e-5
   weight_decay: 0
 
 callbacks:
   - _target_: callbacks.GradualUnfreezingCallback
     unfreeze_per_epoch: 12
 
-
 data:
   trunc_type: "end"
-
-
 
 defaults:
   - override /data: news_tokenized
@@ -24,4 +21,4 @@ defaults:
   - override /optimizer: adamW
   - override /model: robeczech_class
 
-max_epochs: 7
+max_epochs: 2

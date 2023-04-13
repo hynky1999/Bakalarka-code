@@ -1,4 +1,2 @@
-dataset:
-  _target_: "datamodules.NewsTfidfModule"
-  df_path: "hynky/czech_news_dataset"
-  tfidf_path: "Modelling/Baseline/dataset/debug"
+dataset_path: "hynky/czech_news_dataset"
+tfidf_path: "Modelling/Baseline/tfidf/debug"

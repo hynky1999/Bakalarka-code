@@ -60,6 +60,7 @@ def create_test_metrics(num_classes: int):
     test_metrics = [
         partial_create("f1_macro", epoch=True, step=False),
         partial_create("f1_micro", epoch=True, step=False),
+        partial_create("confusion_matrix", epoch=True, step=False),
     ]
     return test_metrics
 
@@ -110,14 +111,32 @@ def prepare_confussion_matrix_for_logging(confusion_matrix):
     return data, ["Actual", "Predicted", "Count"]
 
 
-def log_metrics(model, split, **kwargs):
-        for metric in model.metrics[split + "_metrics"]:
-            metric.update(**kwargs)
-            model.log(
-                f"{split}/{metric.metadata.readable_name}",
-                metric,
-                on_step=metric.metadata.step,
-                on_epoch=metric.metadata.epoch,
-                logger=True,
-            )
+def log_metrics(model, split, step=False, epoch=False, **kwargs):
+        metrics = model.metrics[split + "_metrics"]
+        for metric in metrics:
+            if step:
+                metric.update(**kwargs)
+
+            if metric.metadata.step and step:
+                if isinstance(metric._metric, MulticlassConfusionMatrix):
+                    log_confussion_matrix(model, metric._metric.compute(), split)
+                else:
+                    model.log(
+                        f"{split}/{metric.metadata.readable_name}_step",
+                        metric.compute(),
+                        logger=True,
+                    )
+            if metric.metadata.epoch and epoch:
+                if isinstance(metric._metric, MulticlassConfusionMatrix):
+                    log_confussion_matrix(model, metric._metric.compute(), split)
+                else:
+                    model.log(
+                        f"{split}/{metric.metadata.readable_name}_epoch",
+                        metric.compute(),
+                        logger=True,
+                    )
+            if epoch:
+                metric.reset()
+            
+        
     

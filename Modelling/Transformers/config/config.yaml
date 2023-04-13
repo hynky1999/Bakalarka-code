@@ -1,5 +1,7 @@
 seed: 42
 
+id: ???
+
 run:
   mode: null
   chckpt_path: ???
@@ -8,9 +10,10 @@ run:
 max_epochs: 1
 log_every_n_steps: 100
 val_check_interval: 0.1
-limit_val_batches: 0.125
+limit_val_batches: 0.2
 limit_test_batches: null
 limit_train_batches: null
+max_steps: -1
 fast_dev_run: null
 callbacks: []
 
@@ -35,7 +38,8 @@ defaults:
   - _self_
   - accelerator: cpu_single
   - model: ???
-  - optimizer: ???
-  - scheduler: ???
+  - optimizer: null
+  - scheduler: null
   - data: ???
   - run: debug
+  - task: ???

@@ -70,26 +70,3 @@ class NewsTfidfModule(DataModule):
     def __len__(self):
         return self.data.shape[0]
 
-
-class SklearnDataLoader():
-    def __init__(self, dataset, batch_size, shuffle=False):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        self.num_batches = len(self.dataset) // self.batch_size
-        self.batch_indices = np.arange(self.num_batches)
-        if self.shuffle:
-            np.random.shuffle(self.batch_indices)
-
-    def __iter__(self):
-        for i in self.batch_indices:
-            yield self.dataset[i * self.batch_size : (i + 1) * self.batch_size]
-
-    def __len__(self):
-        return self.num_batches
-
-
-
-    
-
-

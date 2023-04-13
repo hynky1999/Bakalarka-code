@@ -13,12 +13,22 @@ def count_params(opt: Optimizer, grad: bool = True):
 
 
 class GradualUnfreezingCallback(BaseFinetuning):
-    def __init__(self, unfreeze_per_epoch: int, div_lr: float = 2.6, min_unfreeze_layer: int = 0, classifier_lr=None):
+    @staticmethod
+    def get_bone(model):
+        if hasattr(model.model, "roberta"):
+            return model.model.roberta
+        elif hasattr(model.model, "bert"):
+            return model.model.bert
+        else:
+            raise ValueError("No bone found")
+
+
+    def __init__(self, unfreeze_per_epoch: int, div_lr: float = 2.6, min_unfreeze_layer: int = 0, start_lr=None, start_decay=None):
         super().__init__()
         self.unfreeze_per_epoch = unfreeze_per_epoch
         self.total_layers = 0
-        self.start_lr = None
-        self.start_decay = None
+        self.start_lr = start_lr
+        self.start_decay = start_decay
         self.div_lr = div_lr
         self.min_unfreeze_layer = min_unfreeze_layer
 
@@ -27,7 +37,8 @@ class GradualUnfreezingCallback(BaseFinetuning):
         self.freeze(model)
         # Classifier unfreeze
         self.make_trainable(model.model.classifier)
-        self.total_layers = len(model.model.roberta.encoder.layer)
+
+        self.total_layers = len(self.get_bone(model).encoder.layer)
 
     def finetune_function(
         self, model: LightningModule, epoch: int, optimizer: Optimizer
@@ -54,7 +65,7 @@ class GradualUnfreezingCallback(BaseFinetuning):
             lr = lr / self.div_lr**epoch
 
 
-        new_layers = model.model.roberta.encoder.layer[
+        new_layers = self.get_bone(model).encoder.layer[
             l_unfreeze_l:r_unfreeze_l
         ]
         print(f"Unfreezing {l_unfreeze_l}-{r_unfreeze_l} layers with lr {lr} and decay {decay}")

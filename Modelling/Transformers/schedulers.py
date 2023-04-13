@@ -49,6 +49,7 @@ def get_linear_schedule_for_discriminiative_lr(
     min_lr_classifier: float,
     num_warmup_steps_backbone: float,
     min_lr_backbone: float,
+    use_offset: bool,
 ):
 
     assert trainer.max_epochs != None and trainer.estimated_stepping_batches != None
@@ -68,7 +69,9 @@ def get_linear_schedule_for_discriminiative_lr(
         for _ in range(groups_per_unfreeze)
     ]
     for i in range(total_unfreezes):
-        offset = i * steps_per_epoch
+        offset = 0
+        if use_offset:
+            offset = i * steps_per_epoch
         remaining_steps = training_steps - offset
         pg_lambdas.extend(
             [

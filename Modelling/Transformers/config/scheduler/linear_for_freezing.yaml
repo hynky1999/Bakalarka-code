@@ -5,3 +5,4 @@ num_warmup_steps_classifier: 0.1
 num_warmup_steps_backbone: 0.1
 min_lr_classifier: 0
 min_lr_backbone: 0
+use_offset: true

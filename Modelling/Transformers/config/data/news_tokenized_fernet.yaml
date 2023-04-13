@@ -1,0 +1,3 @@
+_target_: "datamodules.NewsDataModule"
+tokenizer: "fav-kky/FERNET-News"
+cache_dir: "/home/kydliceh/.cache/"

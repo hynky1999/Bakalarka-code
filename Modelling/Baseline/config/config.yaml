@@ -1,17 +1,16 @@
 score_types:
 - 'f1_macro'
 - 'f1_micro'
-- 'accuracy'
 
 n_proc: 4
 output_path: "Modelling/Baseline/models"
 
 logger:
   mode: online
+  run_id: null
 run:
-  load_model: null
   test: False
-  train: null
+  train: False
   eval: False
 
 
@@ -22,4 +21,3 @@ search:
 defaults:
   - data: base
   - model: logistic_regression
-  - callbacks: basics

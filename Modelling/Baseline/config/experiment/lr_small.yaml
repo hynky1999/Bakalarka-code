@@ -1,0 +1,10 @@
+# @package _global_
+
+hydra:
+  sweeper:
+    params:
+      model.model.C: 1.0, 10.0, 100.0, 1000.0
+      model.model.max_iter: 800
+defaults:
+  - override /data: small
+  - override /model: logistic_regression

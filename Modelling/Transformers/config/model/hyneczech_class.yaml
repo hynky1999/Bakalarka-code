@@ -1,2 +1,8 @@
-_target_: models.FineTunedClassifier
-pretrained_model: "hynky/hyneczech-base"
+model:
+  _target_: models.FineTunedClassifier
+  pretrained_model: "hynky/hyneczech-base"
+
+metrics:
+  patience: 10
+  monitor: val/f1_macro_epoch
+  mode: max

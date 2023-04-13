@@ -6,9 +6,6 @@ optimizer:
   betas: [0.9, 0.98]
   weight_decay: 0
 
-callbacks:
-  - _target_: lightning.pytorch.callbacks.ModelCheckpoint
-
 defaults:
   - override /data: news_lm
   - override /scheduler: linear_warmup

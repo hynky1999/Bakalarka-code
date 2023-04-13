@@ -2,10 +2,10 @@
 
 # Can't run at start 64 as wouldn't work with 2 GPUs
 # due to effective batch size
-batch_size: 12
+batch_size: 8
 
 optimizer:
-  lr: 4.5e-5
+  lr: 3e-5
   weight_decay: 0
 
 callbacks:

@@ -1,5 +1,2 @@
-name: category
-setting:
-  column: category
-  num_classes: 25
+column: category
 

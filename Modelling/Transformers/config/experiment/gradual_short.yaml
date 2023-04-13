@@ -1,0 +1,30 @@
+# @package _global_
+# Can't run at start 64 as wouldn't work with 2 GPUs
+# due to effective batch size
+batch_size: [48, 48, 48, 24, 24, 24, 16, 16, 16, 12, 8, 8]
+
+optimizer:
+  lr: 1e-3
+  weight_decay: 0
+
+scheduler:
+  total_unfreezes: 12
+  min_lr_classifier: 5e-5
+  num_warmup_steps_classifier: 0
+
+callbacks:
+  - _target_: callbacks.GradualUnfreezingCallback
+    unfreeze_per_epoch: 1
+    div_lr: 1.06
+    # Make backbone start at 3e-5
+    start_lr: 3e-5
+
+defaults:
+  - override /data: news_tokenized
+  - override /scheduler: linear_for_freezing
+  - override /optimizer: adamW
+  - override /model: robeczech_class
+
+max_epochs: 24
+limit_train_batches: 0.08333
+val_check_interval: 1.0

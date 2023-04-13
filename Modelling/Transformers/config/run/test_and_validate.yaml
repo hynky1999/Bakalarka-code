@@ -1,0 +1,6 @@
+# @package _global_
+run:
+  mode: "test and validate"
+
+limit_test_batches: 1.0
+limit_val_batches: 1.0
