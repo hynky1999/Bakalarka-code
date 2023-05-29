@@ -1,5 +1,5 @@
 # Bakalarka-code
-This repository contains source codes for my experiencts conducted for bachelor thesis.
+This repository contains source codes for my experiments conducted for bachelor thesis.
 
 ## Layout
 
@@ -19,3 +19,9 @@ Serves for deploying to slurm
 
 ### Results Extraction
 Serves for interpretation of results, mostly as input to the Text of thesis
+
+### GPT-3
+Prepared inputs for finetuning/inference on gpt-3
+
+### Human_EVAL
+Contains results of human evalution
